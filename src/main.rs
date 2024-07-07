@@ -1,7 +1,7 @@
 use std::{convert::Infallible, net::SocketAddr};
 
 
-use http_body_util::{Full};
+use http_body_util::Full;
 use hyper::{Request, Response};
 use server::router::{KillRoute, RouteData, Router, RunRoute};
 
@@ -25,22 +25,7 @@ mod server {
 
 
 
-// async fn handle(request: Request<impl Body>) -> Result<Response<Full<Bytes>>, Infallible> {
 async fn handle(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    // Ok(Response::new(Full::new(Bytes::from("Hello World!"))))
-        // remove trailing slash from path
-        // let path = request.uri().path().trim_end_matches('/');
-        // let method = request.method().as_str();
-    
-        // if std::env::var("APP_ENV").unwrap_or_else(|_| "production".to_string()) == *"development"
-        //     && path.starts_with("/dist/")
-        // {
-        //     let response = Response::new(Body::from(
-        //         std::fs::read_to_string(format!("./public/{path}")).unwrap(),
-        //     ));
-        //     return Ok(response);
-        // }
-
         let router = Router::new(
             vec![
                 // Box::new(Route404 {method: "GET".to_string(), path: "/404".to_string()})
@@ -48,12 +33,6 @@ async fn handle(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Inf
                 Box::new(KillRoute {data: RouteData {method: "POST".to_string(), path: "/kill".to_string()}})
             ]
         );
-
-    
-        // let (parts, body) = request.into_parts();
-        // let boxed_body = body.boxed();
-        // let boxed_request = Request::from_parts(parts, boxed_body);
-        // let response = router.handle_request(boxed_request).await;
 
         let response = router.handle_request(request).await;
     
@@ -89,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // to finish
         tokio::task::spawn(async move {
             // Handle the connection from the client using HTTP1 and pass any
-            // HTTP requests received on that connection to the `hello` function
+            // HTTP requests received on that connection to the `handle` function
             if let Err(err) = http1::Builder::new()
                 // .timer(TokioTimer::new())
                 .serve_connection(io, service_fn(handle))

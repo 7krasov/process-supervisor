@@ -2,7 +2,6 @@ use core::str;
 use bytes::Bytes;
 use hyper::body::Incoming;
 use hyper::{Request, Response};
-// use hyper::Error as HyperError;
 use hyper::http::Error;
 use http_body_util::{BodyExt, Full};
 // use async_trait::async_trait;
@@ -22,10 +21,8 @@ use http_body_util::{BodyExt, Full};
 pub trait Handlable: Send + Sync {
     fn method(&self) -> &str;
     fn path(&self) -> &str;
-    //fn handle_data(&self, body: String) -> Response<BoxBody<Bytes, Error>>;
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
     fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
-    // fn clone(&self) -> Box<dyn Route>;
 }
 
 
@@ -50,7 +47,6 @@ impl Handlable for RunRoute {
     fn path(&self) -> &str {
         return self.data.path.as_str();
     }
-    //fn handle_data(&self, body: String) -> Response<BoxBody<Bytes, Error>> {
     //async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
     fn handle_data(&self, _body: String) -> Result<Response<Full<Bytes>>, Error> {
         let bytes = bytes::Bytes::from("A process is running.");
@@ -77,7 +73,6 @@ impl Handlable for Route404 {
     fn path(&self) -> &str {
         return self.data.path.as_str();
     }
-    //fn handle_data(&self, body: String) -> Response<BoxBody<Bytes, Error>> {
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
     fn handle_data(&self, _body: String) -> Result<Response<Full<Bytes>>, Error> {
         let bytes = bytes::Bytes::from("404");
@@ -102,8 +97,6 @@ impl Handlable for KillRoute {
     fn path(&self) -> &str {
         return self.data.path.as_str();
     }
-    //fn handle_data(&self, body: String) -> Response<BoxBody<Bytes, Error>> {
-    // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
     fn handle_data(&self, _body: String) -> Result<Response<Full<Bytes>>, Error> {
         let bytes = bytes::Bytes::from("OK");
         let body = Full::new(bytes);
@@ -120,22 +113,9 @@ pub struct Router {
 
 impl Router {
     pub fn new(routes:Vec<Box<dyn Handlable + Send + Sync>>) -> Self {
-        // let mut routes: Vec<Box<dyn Handlable>> = vec![
-        //     // Box::new(Route404 {method: "GET".to_string(), path: "/404".to_string()})
-        //     Box::new(RunRoute {data: RouteData {method: "POST".to_string(), path: "/run".to_string()}}),
-        //     Box::new(KillRoute {data: RouteData {method: "POST".to_string(), path: "/kill".to_string()}})
-        // ];
-
         let route_404 = Route404 {data: RouteData {method: "GET".to_string(), path: "/404".to_string()}};
-        // let return_box = Box::new(route_404);
-        // return return_box;
-        let route_not_found = Box::new(route_404) as Box<dyn Handlable + Send + Sync>;
-
-        Self { routes: routes, not_found_route: route_not_found}
+        Self { routes, not_found_route: Box::new(route_404) as Box<dyn Handlable + Send + Sync>}
     }
-    // pub async fn handle_request(self, req: Request<BoxBody<Bytes, Error>>) -> Response<BoxBody<Bytes, Error>> {
-    // pub async fn handle_request(self, req: Request<BoxBody<Bytes, Error>>) -> Response<Full<Bytes>> {
-    // pub async fn handle_request(self, req: Request<BoxBody<Bytes, HyperError>>) -> Response<Full<Bytes>> {
     pub async fn handle_request(self, req: Request<Incoming>) -> Response<Full<Bytes>> {
         let route = self.route(req.method().as_str(), req.uri().path());
 
@@ -158,7 +138,6 @@ impl Router {
         let b = b.unwrap();
         let b = b.to_bytes();
 
-        // let response = route.handle_data(str::from_utf8(&b).unwrap().to_string()).await;
         let response = route.handle_data(str::from_utf8(&b).unwrap().to_string());
         
         match response {
@@ -178,7 +157,6 @@ impl Router {
     }
 
     fn route(&self, method: &str, path: &str) -> &Box<(dyn Handlable + Send + Sync + 'static)> {
-    // fn route(&self, method: &str, path: &str) -> Box<(dyn Routable + 'static)> {
         let route = self
             .routes
             .iter()
@@ -186,7 +164,6 @@ impl Router {
 
         
         if route.is_none() {
-            //return &self.not_found_route;
             return &self.not_found_route;
         }
 
