@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::process::{Child, Command};
 use procfs::process::Process;
 
+#[derive(Debug)]
 pub struct ChildState {
     is_running: bool,
     is_finished: bool,
