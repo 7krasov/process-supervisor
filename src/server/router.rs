@@ -1,9 +1,11 @@
 use core::str;
+use std::collections::HashMap;
 use bytes::Bytes;
 use hyper::body::Incoming;
 use hyper::{Request, Response};
 use hyper::http::Error;
 use http_body_util::{BodyExt, Full};
+use std::fmt::Debug;
 // use async_trait::async_trait;
 
 
@@ -18,25 +20,34 @@ use http_body_util::{BodyExt, Full};
 
 
 // #[async_trait]
-pub trait Handlable: Send + Sync {
+pub trait Handlable: Send + Sync + Debug {
     fn method(&self) -> &str;
     fn path(&self) -> &str;
+    fn params(&self) -> Option<HashMap<String, ParamType>> {
+        return None;
+    }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
-    fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
+    fn handle_data(&self, route_req_params: HashMap<String, String>, body: String) -> Result<Response<Full<Bytes>>, Error>;
 }
 
+#[derive(Clone)]
+#[derive(Debug)]
+pub enum ParamType {
+    AnyString,
+    Integer,
+}
 
+#[derive(Debug)]
 pub struct RouteData {
     pub method: String,
     pub path: String,
+    pub params: Option<HashMap<String, ParamType>>,
 }
 
-
 //"run" route
+#[derive(Debug)]
 pub struct RunRoute {
     pub data: RouteData,
-    // pub method: String,
-    // pub path: String,
 }
 
 // #[async_trait]
@@ -47,9 +58,13 @@ impl Handlable for RunRoute {
     fn path(&self) -> &str {
         return self.data.path.as_str();
     }
+    fn params(&self) -> Option<HashMap<String, ParamType>> {
+        return self.data.params.clone();
+    }
     //async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    fn handle_data(&self, _body: String) -> Result<Response<Full<Bytes>>, Error> {
-        let bytes = bytes::Bytes::from("A process is running.");
+    fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String) -> Result<Response<Full<Bytes>>, Error> {
+        let message = format!("A process is running for source {}", route_req_params.get("source_id").unwrap());
+        let bytes = bytes::Bytes::from(message);
         let body = Full::new(bytes);
         return Response::builder()
         .status(200)
@@ -61,6 +76,7 @@ impl Handlable for RunRoute {
 }
 
 //"404" route
+#[derive(Debug)]
 pub struct Route404 {
     pub data: RouteData,
 }
@@ -74,7 +90,7 @@ impl Handlable for Route404 {
         return self.data.path.as_str();
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    fn handle_data(&self, _body: String) -> Result<Response<Full<Bytes>>, Error> {
+    fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String) -> Result<Response<Full<Bytes>>, Error> {
         let bytes = bytes::Bytes::from("404");
         let body = Full::new(bytes);
         return Response::builder()
@@ -85,6 +101,7 @@ impl Handlable for Route404 {
 
 
 //"kill" route
+#[derive(Debug)]
 pub struct KillRoute {
     pub data: RouteData,
 }
@@ -97,8 +114,12 @@ impl Handlable for KillRoute {
     fn path(&self) -> &str {
         return self.data.path.as_str();
     }
-    fn handle_data(&self, _body: String) -> Result<Response<Full<Bytes>>, Error> {
-        let bytes = bytes::Bytes::from("OK");
+    fn params(&self) -> Option<HashMap<String, ParamType>> {
+        return self.data.params.clone();
+    }
+    fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String) -> Result<Response<Full<Bytes>>, Error> {
+        let message = format!("A process was killed for source {}", route_req_params.get("source_id").unwrap());
+        let bytes = bytes::Bytes::from(message);
         let body = Full::new(bytes);
         return Response::builder()
         .status(200)
@@ -113,12 +134,15 @@ pub struct Router {
 
 impl Router {
     pub fn new(routes:Vec<Box<dyn Handlable + Send + Sync>>) -> Self {
-        let route_404 = Route404 {data: RouteData {method: "GET".to_string(), path: "/404".to_string()}};
+        let route_404 = Route404 {data: RouteData {method: "GET".to_string(), path: "/404".to_string(), params: None}};
         Self { routes, not_found_route: Box::new(route_404) as Box<dyn Handlable + Send + Sync>}
     }
     pub async fn handle_request(self, req: Request<Incoming>) -> Response<Full<Bytes>> {
-        let route = self.route(req.method().as_str(), req.uri().path());
+        let route: &Box<dyn Handlable + Send + Sync> = self.route(req.method().as_str(), req.uri().path());
+        
+        println!("route: {:?}", route);
 
+        let route_req_params = self.route_request_params(req.uri().path().to_string(), route);
 
         let b = req.collect().await;
 
@@ -138,7 +162,7 @@ impl Router {
         let b = b.unwrap();
         let b = b.to_bytes();
 
-        let response = route.handle_data(str::from_utf8(&b).unwrap().to_string());
+        let response = route.handle_data(route_req_params, str::from_utf8(&b).unwrap().to_string());
         
         match response {
             Ok(response) => response,
@@ -156,11 +180,34 @@ impl Router {
         }
     }
 
-    fn route(&self, method: &str, path: &str) -> &Box<(dyn Handlable + Send + Sync + 'static)> {
-        let route = self
-            .routes
-            .iter()
-            .find(|route| route.method() == method && route.path() == path);
+    fn route(&self, req_method: &str, req_path: &str) -> &Box<(dyn Handlable + Send + Sync + 'static)> {
+        let req_path_segments: Vec<&str> = req_path.trim_matches('/').split('/').collect();
+
+        let route = self.routes.iter().find(|route| {
+            let route_segments: Vec<&str> = route.path().trim_matches('/').split('/').collect();
+            if route.method() != req_method || req_path_segments.len() != route_segments.len() {
+                return false;
+            }
+
+            route_segments.iter().zip(req_path_segments.iter()).all(|(route_segment, path_segment)| {
+                if route_segment.starts_with('{') && route_segment.ends_with('}') {
+                    // This is a variable segment, consider it a match for any value.
+                    true
+                } else {
+                    // This is a static segment, it must match exactly.
+                    route_segment == path_segment
+                }
+            })
+        });
+
+        // match route {
+        //     Some(route) => route,
+        //     None => &self.not_found_route,
+        // }
+        // let route = self
+        //     .routes
+        //     .iter()
+        //     .find(|route| route.method() == method && route.path() == path);
 
         
         if route.is_none() {
@@ -169,6 +216,47 @@ impl Router {
 
         let route = route.unwrap();
         return route;
+    }
+
+    fn route_request_params(&self, req_path: String, route: &Box<(dyn Handlable + Send + Sync + 'static)>) -> HashMap<String, String> {
+
+        let route_params = route.params().unwrap_or(HashMap::new());
+        let mut route_req_params: HashMap<String, String> = HashMap::new();
+
+        if route_params.is_empty() {
+            return route_req_params;
+        }
+
+        let req_path_segments: Vec<&str> = req_path.trim_matches('/').split('/').collect();
+        let route_path_segments: Vec<&str> = route.path().trim_matches('/').split('/').collect();
+
+        route_path_segments.iter().zip(req_path_segments.iter()).for_each(|(route_segment, req_segment)| {
+            if route_segment.starts_with('{') && route_segment.ends_with('}') {
+                let name = route_segment.trim_matches(|c| c == '{' || c == '}');
+
+                let param_type = route_params.get(name);
+                if param_type.is_none() {
+                    return;
+                }
+
+                let param_type = param_type.unwrap();
+                match param_type {
+                    ParamType::AnyString => {
+                        route_req_params.insert(name.to_string(), req_segment.to_string());
+                    },
+                    ParamType::Integer => {
+                        let segment = req_segment.parse::<i32>();
+                        if segment.is_err() {
+                            return;
+                        }
+                        route_req_params.insert(name.to_string(), req_segment.to_string());
+                    },
+                }
+            }
+        });
+
+        return route_req_params;
+
     }
 }
 

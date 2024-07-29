@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::{convert::Infallible, net::SocketAddr};
 
 
 use http_body_util::Full;
 use hyper::{Request, Response};
-use server::router::{KillRoute, RouteData, Router, RunRoute};
+use server::router::{KillRoute, RouteData, Router, RunRoute, ParamType};
 
 use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;
@@ -24,17 +25,28 @@ mod server {
 //use crate::supervisor::supervisor::Supervisor;
 
 
-
 async fn handle(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
         let router = Router::new(
             vec![
                 // Box::new(Route404 {method: "GET".to_string(), path: "/404".to_string()})
-                Box::new(RunRoute {data: RouteData {method: "POST".to_string(), path: "/run".to_string()}}),
-                Box::new(KillRoute {data: RouteData {method: "POST".to_string(), path: "/kill".to_string()}})
+                Box::new(RunRoute {
+                    data: RouteData {
+                        method: "POST".to_string(),
+                        path: "/run/{source_id}".to_string(),
+                        params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
+                    }
+                }),
+                Box::new(KillRoute {
+                    data: RouteData {
+                        method: "POST".to_string(),
+                        path: "/kill/{source_id}".to_string(),
+                        params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
+                    },
+                })
             ]
         );
 
-        let response = router.handle_request(request).await;
+        let response: Response<Full<Bytes>> = router.handle_request(request).await;
     
         Ok(response)
 }
