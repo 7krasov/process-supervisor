@@ -140,7 +140,7 @@ impl Router {
     pub async fn handle_request(self, req: Request<Incoming>) -> Response<Full<Bytes>> {
         let route: &Box<dyn Handlable + Send + Sync> = self.route(req.method().as_str(), req.uri().path());
         
-        println!("route: {:?}", route);
+        // println!("route: {:?}", route);
 
         let route_req_params = self.route_request_params(req.uri().path().to_string(), route);
 
