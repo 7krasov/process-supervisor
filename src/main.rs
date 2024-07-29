@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use server::http::http_server::start_http_server;
 
 mod supervisor {
@@ -16,8 +18,8 @@ mod server {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-
-    return start_http_server().await;
+    let addr: SocketAddr = ([127, 0, 0, 1], 8888).into();
+    return start_http_server(addr).await;
 
 
     // let mut lnchr = Supervisor::new();

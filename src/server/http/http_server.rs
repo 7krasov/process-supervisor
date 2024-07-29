@@ -40,10 +40,7 @@ async fn handle(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Inf
     Ok(response)
 }
 
-pub async fn start_http_server()-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // This address is localhost
-    let addr: SocketAddr = ([127, 0, 0, 1], 8888).into();
-
+pub async fn start_http_server(addr: SocketAddr)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
     println!("Listening on http://{}", addr);
