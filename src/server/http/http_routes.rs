@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
+use crate::supervisor::supervisor::Supervisor;
 use super::http_router::Handlable;
 use super::http_router::ParamType;
 use super::http_router::RouteData;
-
 use bytes::Bytes;
 use hyper::http::Error;
 use hyper::Response;
@@ -28,7 +30,7 @@ impl Handlable for RunRoute {
         return self.data.params.clone();
     }
     //async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String) -> Result<Response<Full<Bytes>>, Error> {
+    fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         let message = format!("A process is running for source {}", route_req_params.get("source_id").unwrap());
         let bytes = bytes::Bytes::from(message);
         let body = Full::new(bytes);
@@ -56,7 +58,7 @@ impl Handlable for Route404 {
         return self.data.path.as_str();
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String) -> Result<Response<Full<Bytes>>, Error> {
+    fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         let bytes = bytes::Bytes::from("404");
         let body = Full::new(bytes);
         return Response::builder()
@@ -83,7 +85,7 @@ impl Handlable for KillRoute {
     fn params(&self) -> Option<HashMap<String, ParamType>> {
         return self.data.params.clone();
     }
-    fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String) -> Result<Response<Full<Bytes>>, Error> {
+    fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         let message = format!("A process was killed for source {}", route_req_params.get("source_id").unwrap());
         let bytes = bytes::Bytes::from(message);
         let body = Full::new(bytes);

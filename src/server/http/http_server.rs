@@ -2,45 +2,24 @@ use hyper::{Request, Response};
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::{convert::Infallible, net::SocketAddr};
+use crate::supervisor::supervisor::Supervisor;
 use super::http_router::{Handlable, ParamType, RouteData, Router};
 use super::http_routes::{KillRoute, RunRoute, Route404};
 use hyper::server::conn::http1;
-use hyper::service::service_fn;
+use hyper::service::Service;
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-async fn handle(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    let router = Router::new(
-        vec![
-            // Box::new(Route404 {method: "GET".to_string(), path: "/404".to_string()})
-            Box::new(RunRoute {
-                data: RouteData {
-                    method: "POST".to_string(),
-                    path: "/run/{source_id}".to_string(),
-                    params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
-                }
-            }),
-            Box::new(KillRoute {
-                data: RouteData {
-                    method: "POST".to_string(),
-                    path: "/kill/{source_id}".to_string(),
-                    params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
-                },
-            })
-        ],
-        Box::new(
-            Route404 {data: RouteData {method: "GET".to_string(), path: "/404".to_string(), params: None}}
-        ) as Box<dyn Handlable + Send + Sync>
+pub async fn start_http_server(addr: SocketAddr, supervisor: Arc<Mutex<Supervisor>>)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     
-    );
-
-    let response: Response<Full<Bytes>> = router.handle_request(request).await;
-
-    Ok(response)
-}
-
-pub async fn start_http_server(addr: SocketAddr)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let http_service = HttpService {
+        supervisor: Arc::clone(&supervisor),
+    };
+    
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
     println!("Listening on http://{}", addr);
@@ -58,6 +37,7 @@ pub async fn start_http_server(addr: SocketAddr)-> Result<(), Box<dyn std::error
         // `hyper::rt` IO traits.
         let io = TokioIo::new(tcp);
 
+        let http_service_cloned = http_service.clone();
         // Spin up a new task in Tokio so we can continue to listen for new TCP connection on the
         // current task without waiting for the processing of the HTTP1 connection we just received
         // to finish
@@ -66,11 +46,57 @@ pub async fn start_http_server(addr: SocketAddr)-> Result<(), Box<dyn std::error
             // HTTP requests received on that connection to the `handle` function
             if let Err(err) = http1::Builder::new()
                 // .timer(TokioTimer::new())
-                .serve_connection(io, service_fn(handle))
-                .await
+                // .serve_connection(io, service_fn(handle))
+                .serve_connection(io, http_service_cloned).await
             {
                 println!("Error serving connection: {:?}", err);
             }
         });
+    }
+}
+
+#[derive(Debug,Clone)]
+struct HttpService {
+    supervisor: Arc<Mutex<Supervisor>>,
+}
+
+impl Service<Request<Incoming>> for HttpService {
+    type Response = Response<Full<Bytes>>;
+
+    type Error = Infallible;
+
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn call(&self, request: Request<Incoming>) -> Self::Future {
+        let router = Router::new(
+            vec![
+                // Box::new(Route404 {method: "GET".to_string(), path: "/404".to_string()})
+                Box::new(RunRoute {
+                    data: RouteData {
+                        method: "POST".to_string(),
+                        path: "/run/{source_id}".to_string(),
+                        params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
+                    }
+                }),
+                Box::new(KillRoute {
+                    data: RouteData {
+                        method: "POST".to_string(),
+                        path: "/kill/{source_id}".to_string(),
+                        params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
+                    },
+                })
+            ],
+            Box::new(
+                Route404 {data: RouteData {method: "GET".to_string(), path: "/404".to_string(), params: None}}
+            ) as Box<dyn Handlable + Send + Sync>
+        
+        );
+
+        let supervisor = self.supervisor.clone();
+        Box::pin(async {
+            // Ok(async_fn)
+            let response: Response<Full<Bytes>> = router.handle_request(request, supervisor).await;
+            Ok(response)
+        })
     }
 }

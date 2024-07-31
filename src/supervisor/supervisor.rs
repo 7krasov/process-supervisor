@@ -21,6 +21,7 @@ impl fmt::Display for ChildState {
     }
 }
 
+#[derive(Debug)]
 pub struct Supervisor {
     processes: Arc<Mutex<HashMap<i32, Child>>>
 }

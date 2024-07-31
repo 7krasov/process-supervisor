@@ -1,11 +1,14 @@
 use core::str;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use bytes::Bytes;
 use hyper::body::Incoming;
 use hyper::{Request, Response};
 use hyper::http::Error;
 use http_body_util::{BodyExt, Full};
 use std::fmt::Debug;
+
+use crate::supervisor::supervisor::Supervisor;
 // use async_trait::async_trait;
 
 
@@ -27,7 +30,7 @@ pub trait Handlable: Send + Sync + Debug {
         return None;
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
-    fn handle_data(&self, route_req_params: HashMap<String, String>, body: String) -> Result<Response<Full<Bytes>>, Error>
+    fn handle_data(&self, route_req_params: HashMap<String, String>, body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error>
     {
         let message = format!("An unhandled route {} {} {:?}", self.method(), self.path(), route_req_params);
         let bytes = bytes::Bytes::from(message);
@@ -52,6 +55,7 @@ pub struct RouteData {
     pub params: Option<HashMap<String, ParamType>>,
 }
 
+#[derive(Debug)]
 pub struct Router {
     routes: Vec<Box<dyn Handlable + Send + Sync>>,
     not_found_route: Box<dyn Handlable + Send + Sync>,
@@ -63,7 +67,7 @@ impl Router {
         // Self { routes, not_found_route: Box::new(route_404) as Box<dyn Handlable + Send + Sync>}
         Self { routes, not_found_route: route_404}
     }
-    pub async fn handle_request(self, req: Request<Incoming>) -> Response<Full<Bytes>> {
+    pub async fn handle_request(self, req: Request<Incoming>, supervisor: Arc<Mutex<Supervisor>>) -> Response<Full<Bytes>> {
         let route: &Box<dyn Handlable + Send + Sync> = self.route(req.method().as_str(), req.uri().path());
         
         // println!("route: {:?}", route);
@@ -88,7 +92,7 @@ impl Router {
         let b = b.unwrap();
         let b = b.to_bytes();
 
-        let response = route.handle_data(route_req_params, str::from_utf8(&b).unwrap().to_string());
+        let response = route.handle_data(route_req_params, str::from_utf8(&b).unwrap().to_string(), supervisor);
         
         match response {
             Ok(response) => response,
