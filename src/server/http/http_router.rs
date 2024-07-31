@@ -27,7 +27,15 @@ pub trait Handlable: Send + Sync + Debug {
         return None;
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
-    fn handle_data(&self, route_req_params: HashMap<String, String>, body: String) -> Result<Response<Full<Bytes>>, Error>;
+    fn handle_data(&self, route_req_params: HashMap<String, String>, body: String) -> Result<Response<Full<Bytes>>, Error>
+    {
+        let message = format!("An unhandled route {} {} {:?}", self.method(), self.path(), route_req_params);
+        let bytes = bytes::Bytes::from(message);
+        let body = Full::new(bytes);
+        return Response::builder()
+        .status(500)
+        .body(body);
+    }
 }
 
 #[derive(Clone)]
