@@ -12,14 +12,14 @@ use http_body_util::Full;
 
 // use async_trait::async_trait;
 
-//"run" route
+//"launch" route
 #[derive(Debug)]
-pub struct RunRoute {
+pub struct LaunchRoute {
     pub data: RouteData,
 }
 
 // #[async_trait]
-impl Handlable for RunRoute {
+impl Handlable for LaunchRoute {
     fn method(&self) -> &str {
         return self.data.method.as_str();
     }
@@ -31,15 +31,21 @@ impl Handlable for RunRoute {
     }
     //async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
     fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
-        let message = format!("A process is running for source {}", route_req_params.get("source_id").unwrap());
-        let bytes = bytes::Bytes::from(message);
-        let body = Full::new(bytes);
-        return Response::builder()
-        .status(200)
-        .body(body);
-        // return Response::builder()
-        // .status(200)
-        // .body(body);
+
+        let source_id = route_req_params.get("source_id").unwrap().parse::<i32>().unwrap();
+
+        let mut supervisor_guard = supervisor.lock().unwrap();
+        let result = supervisor_guard.launch(source_id);
+        let http_status_code = match result.is_success() {
+            true => 200,
+            false => 500
+        };
+        let message = match result.is_success() {
+            true => format!("A process was started for source {}, PID={}", source_id, result.pid().unwrap()),
+            false => format!("Failed to start a process for source {}. Error: {}", source_id, result.error_message().unwrap())
+        };
+
+        return self.prepare_response(message, http_status_code);
     }
 }
 
@@ -58,12 +64,8 @@ impl Handlable for Route404 {
         return self.data.path.as_str();
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
-        let bytes = bytes::Bytes::from("404");
-        let body = Full::new(bytes);
-        return Response::builder()
-        .status(404)
-        .body(body);
+    fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+        return self.prepare_response("404".to_string(), 404);
     }
 }
 
@@ -86,11 +88,19 @@ impl Handlable for KillRoute {
         return self.data.params.clone();
     }
     fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
-        let message = format!("A process was killed for source {}", route_req_params.get("source_id").unwrap());
-        let bytes = bytes::Bytes::from(message);
-        let body = Full::new(bytes);
-        return Response::builder()
-        .status(200)
-        .body(body);
+        let source_id = route_req_params.get("source_id").unwrap().parse::<i32>().unwrap();
+        let supervisor_guard = supervisor.lock().unwrap();
+        let result = supervisor_guard.kill(source_id);
+
+        let http_status_code = match result.is_success() {
+            true => 200,
+            false => 500
+        };
+        let message = match result.is_success() {
+            true => format!("A process was killed for source {}", source_id),
+            false => format!("Failed to kill a process for source {}. Error: {}", source_id, result.error_message().unwrap())
+        };
+
+        return self.prepare_response(message, http_status_code);
     }
 }

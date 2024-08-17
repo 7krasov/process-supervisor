@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::{convert::Infallible, net::SocketAddr};
 use crate::supervisor::supervisor::Supervisor;
 use super::http_router::{Handlable, ParamType, RouteData, Router};
-use super::http_routes::{KillRoute, RunRoute, Route404};
+use super::http_routes::{KillRoute, LaunchRoute, Route404};
 use hyper::server::conn::http1;
 use hyper::service::Service;
 use hyper_util::rt::TokioIo;
@@ -71,10 +71,10 @@ impl Service<Request<Incoming>> for HttpService {
         let router = Router::new(
             vec![
                 // Box::new(Route404 {method: "GET".to_string(), path: "/404".to_string()})
-                Box::new(RunRoute {
+                Box::new(LaunchRoute {
                     data: RouteData {
                         method: "POST".to_string(),
-                        path: "/run/{source_id}".to_string(),
+                        path: "/launch/{source_id}".to_string(),
                         params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
                     }
                 }),
@@ -94,8 +94,10 @@ impl Service<Request<Incoming>> for HttpService {
 
         let supervisor = self.supervisor.clone();
         Box::pin(async {
+            println!("Request: {:?}", request);
             // Ok(async_fn)
             let response: Response<Full<Bytes>> = router.handle_request(request, supervisor).await;
+            println!("Response: {:?}", response);
             Ok(response)
         })
     }

@@ -30,13 +30,22 @@ pub trait Handlable: Send + Sync + Debug {
         return None;
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
-    fn handle_data(&self, route_req_params: HashMap<String, String>, body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error>
+    fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error>
     {
-        let message = format!("An unhandled route {} {} {:?}", self.method(), self.path(), route_req_params);
+        unimplemented!();
+        // let message = format!("An unhandled route {} {} {:?}", self.method(), self.path(), route_req_params);
+        // let bytes = bytes::Bytes::from(message);
+        // let body = Full::new(bytes);
+        // return Response::builder()
+        // .status(500)
+        // .body(body);
+    }
+
+    fn prepare_response(&self, message: String, http_status_code: u16) -> Result<Response<Full<Bytes>>, Error> {
         let bytes = bytes::Bytes::from(message);
         let body = Full::new(bytes);
         return Response::builder()
-        .status(500)
+        .status(http_status_code)
         .body(body);
     }
 }

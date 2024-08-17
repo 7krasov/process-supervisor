@@ -1,0 +1,63 @@
+pub struct LaunchResult {
+    pid: Option<u32>,
+    is_success: bool,
+    error_message: Option<String>, 
+}
+
+impl LaunchResult {
+    pub fn new() -> Self {
+        Self {pid: None, is_success: false, error_message: None}
+    }
+
+    pub fn set_success(&mut self, pid: u32) {
+        self.is_success = true;
+        self.pid = Some(pid);
+    }
+
+    pub fn set_error(&mut self, error_message: String) {
+        self.is_success = false;
+        self.error_message = Some(error_message);
+    }
+
+    pub fn is_success(&self) -> bool {
+        return self.is_success;
+    }
+
+    pub fn pid(&self) -> Option<u32> {
+        return self.pid;
+    }
+
+    pub fn error_message(&self) -> Option<&String> {
+        return self.error_message.as_ref();
+    }
+}
+
+pub struct KillResult {
+    is_success: bool,
+    exit_code: Option<i32>,
+    error_message: Option<String>, 
+}
+
+impl KillResult {
+    pub fn new() -> Self {
+        Self { is_success: false, exit_code: None, error_message : None}
+    }
+
+    pub fn set_success(&mut self, exit_code: Option<i32>) {
+        self.is_success = true;
+        self.exit_code = exit_code;
+    }
+
+    pub fn set_error(&mut self, error_message: String) {
+        self.is_success = false;
+        self.error_message = Some(error_message);
+    }
+
+    pub fn is_success(&self) -> bool {
+        return self.is_success;
+    }
+
+    pub fn error_message(&self) -> Option<&String> {
+        return self.error_message.as_ref();
+    }
+}

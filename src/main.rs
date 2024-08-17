@@ -4,12 +4,13 @@ use server::http::http_server::start_http_server;
 
 mod supervisor {
     pub mod supervisor;
+    mod results;
 }
 
 mod server {
     pub mod http {
-        pub mod http_router;
-        pub mod http_routes;
+        mod http_router;
+        mod http_routes;
         pub mod http_server;
     }
 }
