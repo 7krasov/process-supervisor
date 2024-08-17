@@ -4,11 +4,13 @@ use hyper::body::{Bytes, Incoming};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+// use std::sync::Mutex;
+use tokio::sync::Mutex;
 use std::{convert::Infallible, net::SocketAddr};
 use crate::supervisor::supervisor::Supervisor;
 use super::http_router::{Handlable, ParamType, RouteData, Router};
-use super::http_routes::{KillRoute, LaunchRoute, Route404};
+use super::http_routes::{GetStateList, KillRoute, LaunchRoute, Route404};
 use hyper::server::conn::http1;
 use hyper::service::Service;
 use hyper_util::rt::TokioIo;
@@ -83,6 +85,13 @@ impl Service<Request<Incoming>> for HttpService {
                         method: "POST".to_string(),
                         path: "/kill/{source_id}".to_string(),
                         params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
+                    },
+                }),
+                Box::new(GetStateList {
+                    data: RouteData {
+                        method: "GET".to_string(),
+                        path: "/state-list".to_string(),
+                        params: None,
                     },
                 })
             ],

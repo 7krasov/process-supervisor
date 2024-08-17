@@ -1,6 +1,9 @@
 use core::str;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+// use std::sync::Mutex;
+use tokio::sync::Mutex;
+use async_trait::async_trait;
 use bytes::Bytes;
 use hyper::body::Incoming;
 use hyper::{Request, Response};
@@ -22,7 +25,7 @@ use crate::supervisor::supervisor::Supervisor;
 // }
 
 
-// #[async_trait]
+#[async_trait]
 pub trait Handlable: Send + Sync + Debug {
     fn method(&self) -> &str;
     fn path(&self) -> &str;
@@ -30,7 +33,7 @@ pub trait Handlable: Send + Sync + Debug {
         return None;
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
-    fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error>
+    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error>
     {
         unimplemented!();
         // let message = format!("An unhandled route {} {} {:?}", self.method(), self.path(), route_req_params);
@@ -103,7 +106,7 @@ impl Router {
 
         let response = route.handle_data(route_req_params, str::from_utf8(&b).unwrap().to_string(), supervisor);
         
-        match response {
+        match response.await {
             Ok(response) => response,
             Err(err) => {
                 let err_response_text = err.to_string();
