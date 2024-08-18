@@ -61,3 +61,13 @@ impl KillResult {
         return self.error_message.as_ref();
     }
 }
+
+impl Clone for KillResult {
+    fn clone(&self) -> Self {
+        let mut clone = KillResult::new();
+        clone.is_success = self.is_success;
+        clone.exit_code = self.exit_code;
+        clone.error_message = self.error_message.clone();
+        return clone;
+    }
+}

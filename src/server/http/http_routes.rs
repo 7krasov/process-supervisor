@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-// use std::sync::Mutex;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+use tokio::time::Instant;
 use crate::supervisor::supervisor::Supervisor;
 use super::http_router::Handlable;
 use super::http_router::ParamType;
@@ -30,11 +30,11 @@ impl Handlable for LaunchRoute {
         return self.data.params.clone();
     }
     //async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
 
         let source_id = route_req_params.get("source_id").unwrap().parse::<i32>().unwrap();
 
-        let mut supervisor_guard = supervisor.lock().await;
+        let mut supervisor_guard = supervisor.write().await;
         let future = supervisor_guard.launch(source_id);
         let result = future.await;
         let http_status_code = match result.is_success() {
@@ -64,11 +64,16 @@ impl Handlable for GetStateList {
     fn path(&self) -> &str {
         return self.data.path.as_str();
     }
-    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+        let before_time = Instant::now();
+        println!("GetStateList: before supervisor_clone: {:?}", Instant::now().duration_since(before_time));
         let supervisor_clone = {
-            let supervisor_guard = supervisor.lock().await;
+            println!("GetStateList: before lock: {:?}", Instant::now().duration_since(before_time));
+            let supervisor_guard = supervisor.read().await;
+            println!("GetStateList: after lock: {:?}", Instant::now().duration_since(before_time));
             Arc::new(supervisor_guard.clone())
         };
+        println!("GetStateList: after supervisor_clone: {:?}", Instant::now().duration_since(before_time));
         
         let processes = supervisor_clone.get_state_list().await;
         let json_message = serde_json::to_string(&processes).unwrap();
@@ -92,7 +97,7 @@ impl Handlable for Route404 {
         return self.data.path.as_str();
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         return self.prepare_response("404".to_string(), 404);
     }
 }
@@ -115,11 +120,12 @@ impl Handlable for KillRoute {
     fn params(&self) -> Option<HashMap<String, ParamType>> {
         return self.data.params.clone();
     }
-    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         let source_id = route_req_params.get("source_id").unwrap().parse::<i32>().unwrap();
-        let supervisor_guard = supervisor.lock().await;
-        let future = supervisor_guard.kill(source_id);
-        let result = future.await;
+        // let supervisor_guard = supervisor.lock().await;
+        // let result = supervisor_guard.kill(source_id).await;
+        let supervisor_guard = supervisor.write().await;
+        let result = supervisor_guard.kill(source_id).await;
 
         let http_status_code = match result.is_success() {
             true => 200,
@@ -127,7 +133,7 @@ impl Handlable for KillRoute {
         };
         let message = match result.is_success() {
             true => format!("A process was killed for source {}", source_id),
-            false => format!("Failed to kill a process for source {}. Error: {}", source_id, result.error_message().unwrap())
+            false => format!("Failed to kill a process for source {}. Error: {:?}", source_id, result.error_message().unwrap_or(&"Unknown error".to_string()))
         };
 
         return self.prepare_response(message, http_status_code);

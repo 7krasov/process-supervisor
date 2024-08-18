@@ -1,5 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use supervisor::supervisor::Supervisor;
 use server::http::http_server::start_http_server;
 
@@ -20,7 +21,7 @@ mod server {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
-    let supervisor_arc = Arc::new(Mutex::new(Supervisor::new()));
+    let supervisor_arc = Arc::new(RwLock::new(Supervisor::new()));
 
     let addr: SocketAddr = ([127, 0, 0, 1], 8888).into();
     return start_http_server(addr, supervisor_arc).await;

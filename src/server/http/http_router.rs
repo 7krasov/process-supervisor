@@ -1,8 +1,7 @@
 use core::str;
 use std::collections::HashMap;
 use std::sync::Arc;
-// use std::sync::Mutex;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use async_trait::async_trait;
 use bytes::Bytes;
 use hyper::body::Incoming;
@@ -33,7 +32,7 @@ pub trait Handlable: Send + Sync + Debug {
         return None;
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
-    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<Mutex<Supervisor>>) -> Result<Response<Full<Bytes>>, Error>
+    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error>
     {
         unimplemented!();
         // let message = format!("An unhandled route {} {} {:?}", self.method(), self.path(), route_req_params);
@@ -79,7 +78,7 @@ impl Router {
         // Self { routes, not_found_route: Box::new(route_404) as Box<dyn Handlable + Send + Sync>}
         Self { routes, not_found_route: route_404}
     }
-    pub async fn handle_request(self, req: Request<Incoming>, supervisor: Arc<Mutex<Supervisor>>) -> Response<Full<Bytes>> {
+    pub async fn handle_request(self, req: Request<Incoming>, supervisor: Arc<RwLock<Supervisor>>) -> Response<Full<Bytes>> {
         let route: &Box<dyn Handlable + Send + Sync> = self.route(req.method().as_str(), req.uri().path());
         
         // println!("route: {:?}", route);

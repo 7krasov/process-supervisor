@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-// use std::sync::Mutex;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use std::{convert::Infallible, net::SocketAddr};
 use crate::supervisor::supervisor::Supervisor;
 use super::http_router::{Handlable, ParamType, RouteData, Router};
@@ -16,7 +15,7 @@ use hyper::service::Service;
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-pub async fn start_http_server(addr: SocketAddr, supervisor: Arc<Mutex<Supervisor>>)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn start_http_server(addr: SocketAddr, supervisor: Arc<RwLock<Supervisor>>)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     
     let http_service = HttpService {
         supervisor: Arc::clone(&supervisor),
@@ -59,7 +58,7 @@ pub async fn start_http_server(addr: SocketAddr, supervisor: Arc<Mutex<Superviso
 
 #[derive(Debug,Clone)]
 struct HttpService {
-    supervisor: Arc<Mutex<Supervisor>>,
+    supervisor: Arc<RwLock<Supervisor>>,
 }
 
 impl Service<Request<Incoming>> for HttpService {
