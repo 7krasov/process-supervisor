@@ -15,11 +15,9 @@ use hyper::service::Service;
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-pub async fn start_http_server(addr: SocketAddr, supervisor: Arc<RwLock<Supervisor>>)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn start_http_server(addr: SocketAddr, supervisor_arc: Arc<RwLock<Supervisor>>)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     
-    let http_service = HttpService {
-        supervisor: Arc::clone(&supervisor),
-    };
+    let http_service = HttpService {supervisor_arc};
     
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
@@ -58,7 +56,7 @@ pub async fn start_http_server(addr: SocketAddr, supervisor: Arc<RwLock<Supervis
 
 #[derive(Debug,Clone)]
 struct HttpService {
-    supervisor: Arc<RwLock<Supervisor>>,
+    supervisor_arc: Arc<RwLock<Supervisor>>,
 }
 
 impl Service<Request<Incoming>> for HttpService {
@@ -100,12 +98,14 @@ impl Service<Request<Incoming>> for HttpService {
         
         );
 
-        let supervisor = self.supervisor.clone();
+        let supervisor = self.supervisor_arc.clone();
         Box::pin(async {
-            println!("Request: {:?}", request);
+            println!("Request: {} {:?} Body: {:?}", request.method(), request.uri(), request.body());
+            // println!("Request: {:?}", request);
             // Ok(async_fn)
             let response: Response<Full<Bytes>> = router.handle_request(request, supervisor).await;
-            println!("Response: {:?}", response);
+            println!("Response: {} {:?}", response.status(), response.body());
+            // println!("Response: {:?}", response);
             Ok(response)
         })
     }

@@ -10,7 +10,6 @@ use procfs::process::Process;
 use tokio::task;
 use serde::Serialize;
 use tokio::time::{sleep_until, Duration, Instant};
-// use tokio::sync::oneshot::{self};
 
 use super::results::{KillResult, LaunchResult};
 
@@ -43,7 +42,7 @@ impl Supervisor {
         Self { processes: Arc::new(RwLock::new(HashMap::new()))  }
     }
 
-	pub async fn launch(&mut self, source_id: i32) -> LaunchResult {
+	pub async fn launch(&self, source_id: i32) -> LaunchResult {
         let mut command = Command::new("php");
         command.arg("worker/worker.php");
 
@@ -53,8 +52,8 @@ impl Supervisor {
         match spawn_result {
             Ok(child) => {
                 let pid = child.id();
-                let cloned_processes = self.processes.clone();
-                cloned_processes.write().await.insert(source_id, child);
+                let processes_arc = self.processes.clone();
+                processes_arc.write().await.insert(source_id, child);
                 result.set_success(pid);
                 return result;
             },
@@ -70,8 +69,8 @@ impl Supervisor {
         
         let before_time = Instant::now();
 
-        let cloned_processes = self.processes.clone();
-        let mut processes_guard = cloned_processes.write().await;
+        let processes_arc = self.processes.clone();
+        let mut processes_guard = processes_arc.write().await;
         
         //extract child PID from the processes
         let child = processes_guard.get_mut(&source_id);
@@ -86,21 +85,10 @@ impl Supervisor {
         let child = child.unwrap();
         let pid: i32 = child.id() as i32;
 
-        //release mutex so other connections will be able to work
-        // drop(child);
         drop(processes_guard);
-        drop(cloned_processes);
     
         println!("kill: After dropping time: {:?}", Instant::now().duration_since(before_time));
 
-        // let cloned_processes = self.processes.clone();
-        // let cloned_result = Arc::new(Mutex::new(result.clone()));
-
-        // Create a oneshot channel
-        // let (tx, rx) = oneshot::channel();
-
-        // tokio::spawn(async move {
-            //sending a SIGTERM (15) signal and waiting for timeout
         println!("kill: Sending SIGTERM to PID: {}", pid);      
         signal::kill(Pid::from_raw(pid), signal::SIGTERM).unwrap();
         println!("kill: After SIGTERM sending: {:?}", Instant::now().duration_since(before_time));
@@ -112,21 +100,15 @@ impl Supervisor {
 
         let mut result = KillResult::new();
         //after SIGTERM timeout we should send SIGKILL signal to make sure the process will be terminated
-        let cloned_processes = self.processes.clone();
-        // let cloned_processes = supervisor.lock().await.processes.clone();
-        println!("kill: After new cloned_processes cloning: {:?}", Instant::now().duration_since(before_time));
-        let mut processes_guard = cloned_processes.write().await;
+        let processes_arc = self.processes.clone();
+        println!("kill: After new processes_arc cloning: {:?}", Instant::now().duration_since(before_time));
+        let mut processes_guard = processes_arc.write().await;
         println!("kill: After new processes_guard awaiting: {:?}", Instant::now().duration_since(before_time));
-        // let mut result_guard = cloned_result.lock().await;
         println!("kill: After new result_guard awaiting: {:?}", Instant::now().duration_since(before_time));
         //extract child PID from the processes
         let child = processes_guard.get_mut(&source_id);
         if child.is_none() {
-            // result_guard.set_error("Child not found PID for SIGKILL sending".to_string());
             result.set_error("Child not found PID for SIGKILL sending".to_string());
-            // let _ = tx.send(result_guard.clone());
-            // return;
-            // return result_guard.clone();
             return result;
         }
         let child = child.unwrap();
@@ -147,43 +129,31 @@ impl Supervisor {
                     println!("Failed to remove child from processes for source_id: {}", source_id);
                 }
                 drop(processes_guard);
-                drop(cloned_processes);
 
                 match exit_status {
                     Ok(status) => {
                         match status {
                             Some(_) => {
                                 println!("Status code; {:?}", status.unwrap().code());
-                                // result_guard.set_success(status.unwrap().code());
                                 result.set_success(status.unwrap().code());
                             },
                             None => {
                                 //probably, the process was finished before the killing signal sending
-                                //result_guard.set_success(Some(9999999));
                                 result.set_success(Some(9999999));
                             }
                         };
                     },
                     Err(e) => {
                         println!("Error: {}", e);
-                        // result_guard.set_success(Some(9999999));
-                        // result_guard.set_error(e.to_string());
                         result.set_error(e.to_string());
                     }
                 };
             },
             Err(e) => {
                 result.set_error(e.to_string());
-                //result_guard.set_error(e.to_string());
             }
         }
-            // let _ = tx.send(result_guard.clone()); // Notify the main task
-        // });
 
-        // Wait for the spawned task to complete
-        // let _ = rx.await;
-
-        // result
         return result;
         
     }
@@ -191,10 +161,10 @@ impl Supervisor {
     pub async fn get_state_list(self: Arc<Self>) -> HashMap<i32, ChildState> {
         let before_time = Instant::now();
         println!("get_state_list: Before self.processes.clone(), time: {:?}", Instant::now().duration_since(before_time));
-        let cloned_processes = self.processes.clone();
+        let processes_arc = self.processes.clone();
         println!("get_state_list: After self.processes.clone(), time: {:?}", Instant::now().duration_since(before_time));
-        let processes_guard = cloned_processes.read().await;
-        println!("get_state_list: After cloned_processes.lock().await, time: {:?}", Instant::now().duration_since(before_time));
+        let processes_guard = processes_arc.read().await;
+        println!("get_state_list: Afterprocesses_arc.read().await, time: {:?}", Instant::now().duration_since(before_time));
         let keys: Vec<i32> = processes_guard.keys().cloned().collect();
         drop(processes_guard);
 
@@ -221,8 +191,6 @@ impl Supervisor {
 
         println!("get_state_list: After futures collect, time: {:?}", Instant::now().duration_since(before_time));
 
-        // let results = try_join!(futures).await;
-
         let mut states = HashMap::new();
         for future in futures {
             match future.await {
@@ -248,14 +216,13 @@ impl Supervisor {
         // }).collect();
     }
 
-        // pub async fn get_child_state(& self, source_id: i32) -> Result<ChildState, Error> {
 	pub async fn get_child_state(& self, source_id: i32) -> Result<ChildState, Error> {
         let before_time = Instant::now();
         println!("get_child_state: Before self.processes.clone(), time: {:?}", Instant::now().duration_since(before_time));
-		let cloned_processes = self.processes.clone();
+		let processes_arc = self.processes.clone();
         println!("get_child_state: After self.processes.clone(), time: {:?}", Instant::now().duration_since(before_time));
-		let mut processes_guard = cloned_processes.write().await;
-        println!("get_child_state: After cloned_processes.lock().await, time: {:?}", Instant::now().duration_since(before_time));
+		let mut processes_guard = processes_arc.write().await;
+        println!("get_child_state: After processes_arc.write().await, time: {:?}", Instant::now().duration_since(before_time));
 		let child = processes_guard.get_mut(&source_id).ok_or_else(|| Error::new(std::io::ErrorKind::NotFound, "Child not found"))?;
         println!("get_child_state: After processes_guard.get_mut, time: {:?}", Instant::now().duration_since(before_time));
         let exit_status = child.try_wait()?;
@@ -292,20 +259,6 @@ impl Supervisor {
         }
         Ok(status.rssanon.unwrap())
 	}
-
-    // async fn remove_child(&mut self, source_id: i32) {
-    //     let cloned_processes = self.processes.clone();
-    //     let mut processes_guard = cloned_processes.lock().await;
-    //     let res = processes_guard.remove(&source_id);
-    //     match res {
-    //         Some(_) => {},
-    //         None => {
-    //             println!("Failed to remove child from processes for source_id: {}", source_id);
-    //         }
-            
-    //     }
-    // }
-
 }
 
 impl Clone for Supervisor {
@@ -313,7 +266,3 @@ impl Clone for Supervisor {
         Self { processes: Arc::clone(&self.processes) }
     }
 }
-
-// impl Send for Supervisor {
-
-// }

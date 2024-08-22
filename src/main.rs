@@ -1,5 +1,4 @@
 use std::{net::SocketAddr, sync::Arc};
-use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use supervisor::supervisor::Supervisor;
 use server::http::http_server::start_http_server;

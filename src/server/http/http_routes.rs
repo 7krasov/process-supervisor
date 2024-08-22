@@ -29,12 +29,11 @@ impl Handlable for LaunchRoute {
     fn params(&self) -> Option<HashMap<String, ParamType>> {
         return self.data.params.clone();
     }
-    //async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor_arc: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
 
         let source_id = route_req_params.get("source_id").unwrap().parse::<i32>().unwrap();
 
-        let mut supervisor_guard = supervisor.write().await;
+        let supervisor_guard = supervisor_arc.read().await;
         let future = supervisor_guard.launch(source_id);
         let result = future.await;
         let http_status_code = match result.is_success() {
@@ -64,18 +63,18 @@ impl Handlable for GetStateList {
     fn path(&self) -> &str {
         return self.data.path.as_str();
     }
-    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, supervisor_arc: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         let before_time = Instant::now();
         println!("GetStateList: before supervisor_clone: {:?}", Instant::now().duration_since(before_time));
-        let supervisor_clone = {
-            println!("GetStateList: before lock: {:?}", Instant::now().duration_since(before_time));
-            let supervisor_guard = supervisor.read().await;
-            println!("GetStateList: after lock: {:?}", Instant::now().duration_since(before_time));
+        let supervisor_arc_clone = {
+            println!("GetStateList: before read lock: {:?}", Instant::now().duration_since(before_time));
+            let supervisor_guard = supervisor_arc.read().await;
+            println!("GetStateList: after read lock: {:?}", Instant::now().duration_since(before_time));
             Arc::new(supervisor_guard.clone())
         };
         println!("GetStateList: after supervisor_clone: {:?}", Instant::now().duration_since(before_time));
         
-        let processes = supervisor_clone.get_state_list().await;
+        let processes = supervisor_arc_clone.get_state_list().await;
         let json_message = serde_json::to_string(&processes).unwrap();
         return self.prepare_response(json_message, 200);
     }
@@ -97,7 +96,7 @@ impl Handlable for Route404 {
         return self.data.path.as_str();
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
-    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+    async fn handle_data(&self, _route_req_params: HashMap<String, String>, _body: String, _supervisor_arc: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         return self.prepare_response("404".to_string(), 404);
     }
 }
@@ -120,11 +119,9 @@ impl Handlable for KillRoute {
     fn params(&self) -> Option<HashMap<String, ParamType>> {
         return self.data.params.clone();
     }
-    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor_arc: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         let source_id = route_req_params.get("source_id").unwrap().parse::<i32>().unwrap();
-        // let supervisor_guard = supervisor.lock().await;
-        // let result = supervisor_guard.kill(source_id).await;
-        let supervisor_guard = supervisor.write().await;
+        let supervisor_guard = supervisor_arc.read().await;
         let result = supervisor_guard.kill(source_id).await;
 
         let http_status_code = match result.is_success() {
