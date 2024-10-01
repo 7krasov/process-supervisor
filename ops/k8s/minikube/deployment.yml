@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: processes-supervisor
+  name: processes-supervisor-app-deployment
+  labels:
+    app: processes-supervisor-app
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: processes-supervisor-app
+  template:
+    metadata:
+      labels:
+        app: processes-supervisor-app
+    spec:
+      imagePullSecrets:
+        - name: 7krasov-docker
+      tolerations:
+        - effect: NoSchedule
+          key: monitoring
+          value: "true"
+      containers:
+        - name: app
+          image: 7krasov/processes-supervisor-app
+          # imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
+          # envFrom:
+          #   - configMapRef:
+          #       name: processes-source-storage-config-map
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+            # - containerPort: 2112
+            #   name: metrics
+            #   protocol: TCP
+          lifecycle:
+            #let Kubernetes stop traffic to this Pod before  signal be send
+            preStop:
+              exec:
+                command: ["sleep", "105"]
+      #termination graceful period starts countdown right after "preStop" hook called. Lets application complete
+      #all stuff and stop working itself. When this period exceeds, the SIGKILL signal is sent
+      terminationGracePeriodSeconds: 120
+      initContainers:

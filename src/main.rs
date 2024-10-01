@@ -22,7 +22,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let supervisor_arc = Arc::new(RwLock::new(Supervisor::new()));
 
-    let addr: SocketAddr = ([127, 0, 0, 1], 8888).into();
+    // let addr: SocketAddr = ([127, 0, 0, 1], 8888).into();
+    let addr: SocketAddr = ([0, 0, 0, 0], 8080).into();
     return start_http_server(addr, supervisor_arc).await;
 
 
