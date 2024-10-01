@@ -102,7 +102,7 @@ impl Handlable for Route404 {
 }
 
 
-//"kill" route
+//"terminate" route
 #[derive(Debug)]
 pub struct TerminateRoute {
     pub data: RouteData,

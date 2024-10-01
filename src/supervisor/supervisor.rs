@@ -82,7 +82,7 @@ impl Supervisor {
         //extract child PID from the processes
         let child = processes_guard.get_mut(&source_id);
 
-        println!("kill: After getting of child from the process list time: {:?}", Instant::now().duration_since(before_time));
+        println!("terminate: After getting of child from the process list time: {:?}", Instant::now().duration_since(before_time));
 
         let mut result = TerminateResult::new();
         if child.is_none() {
@@ -94,11 +94,11 @@ impl Supervisor {
 
         // drop(processes_guard);
     
-        println!("kill: After dropping time: {:?}", Instant::now().duration_since(before_time));
+        println!("terminate: After dropping time: {:?}", Instant::now().duration_since(before_time));
 
-        println!("kill: Sending SIGTERM to PID: {}", pid);      
+        println!("terminate: Sending SIGTERM to PID: {}", pid);      
         let signal_result = signal::kill(Pid::from_raw(pid), signal::SIGTERM);
-        println!("kill: After SIGTERM sending: {:?}", Instant::now().duration_since(before_time));
+        println!("terminate: After SIGTERM sending: {:?}", Instant::now().duration_since(before_time));
     
         return match signal_result {
             Ok(_) => {
