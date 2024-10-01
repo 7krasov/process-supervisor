@@ -104,6 +104,41 @@ impl Handlable for Route404 {
 
 //"kill" route
 #[derive(Debug)]
+pub struct TerminateRoute {
+    pub data: RouteData,
+}
+
+#[async_trait]
+impl Handlable for TerminateRoute {
+    fn method(&self) -> &str {
+        return self.data.method.as_str();
+    }
+    fn path(&self) -> &str {
+        return self.data.path.as_str();
+    }
+    fn params(&self) -> Option<HashMap<String, ParamType>> {
+        return self.data.params.clone();
+    }
+    async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor_arc: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
+        let source_id = route_req_params.get("source_id").unwrap().parse::<i32>().unwrap();
+        let supervisor_guard = supervisor_arc.read().await;
+        let result = supervisor_guard.terminate(source_id).await;
+
+        let http_status_code = match result.is_success() {
+            true => 200,
+            false => 500
+        };
+        let message = match result.is_success() {
+            true => format!("A process got the termination signal for source {}", source_id),
+            false => format!("Failed to start a termination of the process for source {}. Error: {:?}", source_id, result.error_message().unwrap_or(&"Unknown error".to_string()))
+        };
+
+        return self.prepare_response(message, http_status_code);
+    }
+}
+
+//"kill" route
+#[derive(Debug)]
 pub struct KillRoute {
     pub data: RouteData,
 }
@@ -122,7 +157,7 @@ impl Handlable for KillRoute {
     async fn handle_data(&self, route_req_params: HashMap<String, String>, _body: String, supervisor_arc: Arc<RwLock<Supervisor>>) -> Result<Response<Full<Bytes>>, Error> {
         let source_id = route_req_params.get("source_id").unwrap().parse::<i32>().unwrap();
         let supervisor_guard = supervisor_arc.read().await;
-        let result = supervisor_guard.kill(source_id).await;
+        let result = supervisor_guard.kill_old(source_id).await;
 
         let http_status_code = match result.is_success() {
             true => 200,

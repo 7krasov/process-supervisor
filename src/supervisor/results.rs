@@ -32,6 +32,36 @@ impl LaunchResult {
     }
 }
 
+pub struct OldKillResult {
+    is_success: bool,
+    exit_code: Option<i32>,
+    error_message: Option<String>,
+}
+
+impl OldKillResult {
+    pub fn new() -> Self {
+        Self { is_success: false, exit_code: None, error_message : None}
+    }
+
+    pub fn set_success(&mut self, exit_code: Option<i32>) {
+        self.is_success = true;
+        self.exit_code = exit_code;
+    }
+
+    pub fn set_error(&mut self, error_message: String) {
+        self.is_success = false;
+        self.error_message = Some(error_message);
+    }
+
+    pub fn is_success(&self) -> bool {
+        return self.is_success;
+    }
+
+    pub fn error_message(&self) -> Option<&String> {
+        return self.error_message.as_ref();
+    }
+}
+
 pub struct KillResult {
     is_success: bool,
     exit_code: Option<i32>,
@@ -69,5 +99,33 @@ impl Clone for KillResult {
         clone.exit_code = self.exit_code;
         clone.error_message = self.error_message.clone();
         return clone;
+    }
+}
+
+pub struct TerminateResult {
+    is_success: bool,
+    error_message: Option<String>, 
+}
+
+impl TerminateResult {
+    pub fn new() -> Self {
+        Self { is_success: false, error_message : None}
+    }
+
+    pub fn set_success(&mut self) {
+        self.is_success = true;
+    }
+
+    pub fn set_error(&mut self, error_message: String) {
+        self.is_success = false;
+        self.error_message = Some(error_message);
+    }
+
+    pub fn is_success(&self) -> bool {
+        return self.is_success;
+    }
+
+    pub fn error_message(&self) -> Option<&String> {
+        return self.error_message.as_ref();
     }
 }

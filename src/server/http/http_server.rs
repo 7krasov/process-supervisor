@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use std::{convert::Infallible, net::SocketAddr};
 use crate::supervisor::supervisor::Supervisor;
 use super::http_router::{Handlable, ParamType, RouteData, Router};
-use super::http_routes::{GetStateList, KillRoute, LaunchRoute, Route404};
+use super::http_routes::{GetStateList, KillRoute, LaunchRoute, Route404, TerminateRoute};
 use hyper::server::conn::http1;
 use hyper::service::Service;
 use hyper_util::rt::TokioIo;
@@ -76,6 +76,13 @@ impl Service<Request<Incoming>> for HttpService {
                         path: "/launch/{source_id}".to_string(),
                         params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
                     }
+                }),
+                Box::new(TerminateRoute {
+                    data: RouteData {
+                        method: "POST".to_string(),
+                        path: "/terminate/{source_id}".to_string(),
+                        params: Some(HashMap::from([("source_id".to_string(), ParamType::Integer)])),
+                    },
                 }),
                 Box::new(KillRoute {
                     data: RouteData {
