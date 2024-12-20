@@ -1,11 +1,11 @@
-use std::{env, net::SocketAddr, sync::Arc, time::Duration};
-use tokio::sync::RwLock;
-use supervisor::supervisor::Supervisor;
 use server::http::http_server::start_http_server;
+use std::{env, net::SocketAddr, sync::Arc, time::Duration};
+use supervisor::supervisor::Supervisor;
+use tokio::sync::RwLock;
 
 mod supervisor {
-    pub mod supervisor;
     mod results;
+    pub mod supervisor;
 }
 
 mod server {
@@ -16,18 +16,14 @@ mod server {
     }
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-
     let port: u16 = match env::var("HTTP_PORT") {
-        Ok(port) => {
-            port.parse::<u16>().unwrap()
-        },
+        Ok(port) => port.parse::<u16>().unwrap(),
         Err(_) => {
             println!("HTTP_PORT is not set. Using default 8080");
             8080
-        },
+        }
     };
 
     let supervisor_arc = Arc::new(RwLock::new(Supervisor::new()));
@@ -42,29 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     });
 
-
     // let addr: SocketAddr = ([127, 0, 0, 1], 8888).into();
     let addr: SocketAddr = ([0, 0, 0, 0], port).into();
-    return start_http_server(addr, supervisor_arc).await;
-
-
-    // let mut lnchr = Supervisor::new();
-    // lnchr.launch(2506);
-    
-    // let state = lnchr.get_child_state(2506);
-    
-    // match state {
-    //     Ok(state) => println!("{}", state),
-    //     Err(e) => println!("Error: {}", e),
-    // }
-
-    // //wait until process will be run
-    // sleep(Duration::from_secs(1));
-
-    // let kill_state = lnchr.kill(2506);
-
-    // match kill_state {
-    //     Ok(kill_state) => println!("{}", kill_state),
-    //     Err(e) => println!("Error: {}", e),
-    // }
+    start_http_server(addr, supervisor_arc).await
 }
