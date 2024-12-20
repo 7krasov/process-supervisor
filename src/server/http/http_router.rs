@@ -11,38 +11,25 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::supervisor::supervisor::Supervisor;
-// use async_trait::async_trait;
-
-// fn route_method<T>(route: &Route) -> &str {
-//     return route.data.method.as_str();
-// }
-
-// fn route_path<T>(route: &Route) -> &str {
-//     return route.data.path.as_str();
-// }
 
 #[async_trait]
 pub trait Handleable: Send + Sync + Debug {
-    fn method(&self) -> &str;
-    fn path(&self) -> &str;
-    fn params(&self) -> Option<HashMap<String, ParamType>> {
-        None
+    fn data(&self) -> &RouteData;
+    fn method(&self) -> &str {
+        self.data().method.as_str()
     }
-    // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error>;
+    fn path(&self) -> &str {
+        self.data().path.as_str()
+    }
+    fn params(&self) -> Option<HashMap<String, ParamType>> {
+        self.data().params.clone()
+    }
     async fn handle_data(
         &self,
         _route_req_params: HashMap<String, String>,
         _body: String,
         _supervisor_arc: Arc<RwLock<Supervisor>>,
-    ) -> Result<Response<Full<Bytes>>, Error> {
-        unimplemented!();
-        // let message = format!("An unhandled route {} {} {:?}", self.method(), self.path(), route_req_params);
-        // let bytes = bytes::Bytes::from(message);
-        // let body = Full::new(bytes);
-        // return Response::builder()
-        // .status(500)
-        // .body(body);
-    }
+    ) -> Result<Response<Full<Bytes>>, Error>;
 
     fn prepare_response(
         &self,

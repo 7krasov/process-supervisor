@@ -1,5 +1,4 @@
 use super::http_router::Handleable;
-use super::http_router::ParamType;
 use super::http_router::RouteData;
 use crate::supervisor::supervisor::Supervisor;
 use async_trait::async_trait;
@@ -20,14 +19,8 @@ pub struct LaunchRoute {
 
 #[async_trait]
 impl Handleable for LaunchRoute {
-    fn method(&self) -> &str {
-        self.data.method.as_str()
-    }
-    fn path(&self) -> &str {
-        self.data.path.as_str()
-    }
-    fn params(&self) -> Option<HashMap<String, ParamType>> {
-        self.data.params.clone()
+    fn data(&self) -> &RouteData {
+        &self.data
     }
     async fn handle_data(
         &self,
@@ -72,11 +65,8 @@ pub struct GetStateList {
 
 #[async_trait]
 impl Handleable for GetStateList {
-    fn method(&self) -> &str {
-        self.data.method.as_str()
-    }
-    fn path(&self) -> &str {
-        self.data.path.as_str()
+    fn data(&self) -> &RouteData {
+        &self.data
     }
     async fn handle_data(
         &self,
@@ -120,11 +110,8 @@ pub struct Route404 {
 
 #[async_trait]
 impl Handleable for Route404 {
-    fn method(&self) -> &str {
-        self.data.method.as_str()
-    }
-    fn path(&self) -> &str {
-        self.data.path.as_str()
+    fn data(&self) -> &RouteData {
+        &self.data
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
     async fn handle_data(
@@ -145,14 +132,8 @@ pub struct TerminateRoute {
 
 #[async_trait]
 impl Handleable for TerminateRoute {
-    fn method(&self) -> &str {
-        self.data.method.as_str()
-    }
-    fn path(&self) -> &str {
-        self.data.path.as_str()
-    }
-    fn params(&self) -> Option<HashMap<String, ParamType>> {
-        self.data.params.clone()
+    fn data(&self) -> &RouteData {
+        &self.data
     }
     async fn handle_data(
         &self,
@@ -198,14 +179,8 @@ pub struct KillRoute {
 
 #[async_trait]
 impl Handleable for KillRoute {
-    fn method(&self) -> &str {
-        self.data.method.as_str()
-    }
-    fn path(&self) -> &str {
-        self.data.path.as_str()
-    }
-    fn params(&self) -> Option<HashMap<String, ParamType>> {
-        self.data.params.clone()
+    fn data(&self) -> &RouteData {
+        &self.data
     }
     async fn handle_data(
         &self,
