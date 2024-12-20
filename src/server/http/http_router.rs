@@ -70,17 +70,14 @@ pub struct RouteData {
 
 #[derive(Debug)]
 pub struct Router {
-    routes: Vec<Box<dyn Handleable + Send + Sync>>,
-    not_found_route: Box<dyn Handleable + Send + Sync>,
+    routes: Vec<Box<dyn Handleable>>,
+    not_found_route: Box<dyn Handleable>,
 }
 
 impl Router {
-    pub fn new(
-        routes: Vec<Box<dyn Handleable + Send + Sync>>,
-        route_404: Box<dyn Handleable + Send + Sync>,
-    ) -> Self {
+    pub fn new(routes: Vec<Box<dyn Handleable>>, route_404: Box<dyn Handleable>) -> Self {
         // let route_404 = Route404 {data: RouteData {method: "GET".to_string(), path: "/404".to_string(), params: None}};
-        // Self { routes, not_found_route: Box::new(route_404) as Box<dyn Handleable + Send + Sync>}
+        // Self { routes, not_found_route: Box::new(route_404) as Box<dyn Handleable>}
         Self {
             routes,
             not_found_route: route_404,
@@ -91,8 +88,7 @@ impl Router {
         req: Request<Incoming>,
         supervisor_arc: Arc<RwLock<Supervisor>>,
     ) -> Response<Full<Bytes>> {
-        let route: &Box<dyn Handleable + Send + Sync> =
-            self.route(req.method().as_str(), req.uri().path());
+        let route: &Box<dyn Handleable> = self.route(req.method().as_str(), req.uri().path());
 
         // println!("route: {:?}", route);
 
@@ -127,11 +123,7 @@ impl Router {
         })
     }
 
-    fn route(
-        &self,
-        req_method: &str,
-        req_path: &str,
-    ) -> &Box<(dyn Handleable + Send + Sync + 'static)> {
+    fn route(&self, req_method: &str, req_path: &str) -> &Box<(dyn Handleable + 'static)> {
         let req_path_segments: Vec<&str> = req_path.trim_matches('/').split('/').collect();
 
         let route = self.routes.iter().find(|route| {
@@ -172,7 +164,7 @@ impl Router {
     fn route_request_params(
         &self,
         req_path: String,
-        route: &Box<(dyn Handleable + Send + Sync + 'static)>,
+        route: &Box<(dyn Handleable + 'static)>,
     ) -> HashMap<String, String> {
         let route_params = route.params().unwrap_or(HashMap::new());
         let mut route_req_params: HashMap<String, String> = HashMap::new();
@@ -215,13 +207,3 @@ impl Router {
         route_req_params
     }
 }
-
-// impl Default for Router {
-//     fn default() -> Self {
-//         let mut routes: Vec<Box<dyn Route + Send + Sync>> = vec![
-//             Route404 {method: "GET".to_string(), path: "/404".to_string()},
-//         ];
-
-//         Self { routes }
-//     }
-// }

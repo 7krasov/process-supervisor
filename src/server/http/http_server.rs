@@ -117,7 +117,7 @@ impl Service<Request<Incoming>> for HttpService {
                     path: "/404".to_string(),
                     params: None,
                 },
-            }) as Box<dyn Handleable + Send + Sync>,
+            }) as Box<dyn Handleable>,
         );
 
         let supervisor = self.supervisor_arc.clone();
