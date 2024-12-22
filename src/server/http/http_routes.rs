@@ -1,5 +1,4 @@
-use super::http_router::Handleable;
-use super::http_router::RouteData;
+use super::http_router::{Handleable, RouteData};
 use crate::supervisor::Supervisor;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -12,16 +11,21 @@ use tokio::sync::RwLock;
 use tokio::time::Instant;
 
 //"launch" route
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LaunchRoute {
     pub data: RouteData,
 }
 
 #[async_trait]
 impl Handleable for LaunchRoute {
-    fn data(&self) -> &RouteData {
-        &self.data
+    fn data(&self) -> RouteData {
+        self.data.clone()
     }
+
+    fn clone_box(&self) -> Box<dyn Handleable> {
+        Box::new(self.clone())
+    }
+
     async fn handle_data(
         &self,
         route_req_params: HashMap<String, String>,
@@ -58,15 +62,18 @@ impl Handleable for LaunchRoute {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GetStateList {
     pub data: RouteData,
 }
 
 #[async_trait]
 impl Handleable for GetStateList {
-    fn data(&self) -> &RouteData {
-        &self.data
+    fn data(&self) -> RouteData {
+        self.data.clone()
+    }
+    fn clone_box(&self) -> Box<dyn Handleable> {
+        Box::new(self.clone())
     }
     async fn handle_data(
         &self,
@@ -103,15 +110,18 @@ impl Handleable for GetStateList {
 }
 
 //"404" route
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Route404 {
     pub data: RouteData,
 }
 
 #[async_trait]
 impl Handleable for Route404 {
-    fn data(&self) -> &RouteData {
-        &self.data
+    fn data(&self) -> RouteData {
+        self.data.clone()
+    }
+    fn clone_box(&self) -> Box<dyn Handleable> {
+        Box::new(self.clone())
     }
     // async fn handle_data(&self, body: String) -> Result<Response<Full<Bytes>>, Error> {
     async fn handle_data(
@@ -125,15 +135,18 @@ impl Handleable for Route404 {
 }
 
 //"terminate" route
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TerminateRoute {
     pub data: RouteData,
 }
 
 #[async_trait]
 impl Handleable for TerminateRoute {
-    fn data(&self) -> &RouteData {
-        &self.data
+    fn data(&self) -> RouteData {
+        self.data.clone()
+    }
+    fn clone_box(&self) -> Box<dyn Handleable> {
+        Box::new(self.clone())
     }
     async fn handle_data(
         &self,
@@ -172,15 +185,18 @@ impl Handleable for TerminateRoute {
 }
 
 //"kill" route
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KillRoute {
     pub data: RouteData,
 }
 
 #[async_trait]
 impl Handleable for KillRoute {
-    fn data(&self) -> &RouteData {
-        &self.data
+    fn data(&self) -> RouteData {
+        self.data.clone()
+    }
+    fn clone_box(&self) -> Box<dyn Handleable> {
+        Box::new(self.clone())
     }
     async fn handle_data(
         &self,

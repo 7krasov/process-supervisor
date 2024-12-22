@@ -1,6 +1,7 @@
-use super::http_router::{Handleable, ParamType, RouteData, Router};
+use super::http_router::{route, route_request_params, Handleable, ParamType, RouteData};
 use super::http_routes::{GetStateList, KillRoute, LaunchRoute, Route404, TerminateRoute};
 use crate::supervisor::Supervisor;
+use http_body_util::BodyExt;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;
@@ -19,7 +20,11 @@ pub async fn start_http_server(
     addr: SocketAddr,
     supervisor_arc: Arc<RwLock<Supervisor>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let http_service = HttpService { supervisor_arc };
+    let http_service = HttpService {
+        supervisor_arc,
+        routes: Arc::new(init_routes()),
+        default_route: default_route(),
+    };
 
     // Bind to the port and listen for incoming TCP connections
     let listener = TcpListener::bind(addr).await?;
@@ -60,6 +65,8 @@ pub async fn start_http_server(
 #[derive(Debug, Clone)]
 struct HttpService {
     supervisor_arc: Arc<RwLock<Supervisor>>,
+    routes: Arc<Vec<Box<dyn Handleable>>>,
+    default_route: Box<dyn Handleable>,
 }
 
 impl Service<Request<Incoming>> for HttpService {
@@ -70,70 +77,100 @@ impl Service<Request<Incoming>> for HttpService {
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn call(&self, request: Request<Incoming>) -> Self::Future {
-        let router = Router::new(
-            vec![
-                // Box::new(Route404 {method: "GET".to_owned(), path: "/404".to_owned()})
-                Box::new(LaunchRoute {
-                    data: RouteData {
-                        method: "POST".to_owned(),
-                        path: "/launch/{source_id}".to_owned(),
-                        params: Some(HashMap::from([(
-                            "source_id".to_owned(),
-                            ParamType::Integer,
-                        )])),
-                    },
-                }),
-                Box::new(TerminateRoute {
-                    data: RouteData {
-                        method: "POST".to_owned(),
-                        path: "/terminate/{source_id}".to_owned(),
-                        params: Some(HashMap::from([(
-                            "source_id".to_owned(),
-                            ParamType::Integer,
-                        )])),
-                    },
-                }),
-                Box::new(KillRoute {
-                    data: RouteData {
-                        method: "POST".to_owned(),
-                        path: "/kill/{source_id}".to_owned(),
-                        params: Some(HashMap::from([(
-                            "source_id".to_owned(),
-                            ParamType::Integer,
-                        )])),
-                    },
-                }),
-                Box::new(GetStateList {
-                    data: RouteData {
-                        method: "GET".to_owned(),
-                        path: "/state-list".to_owned(),
-                        params: None,
-                    },
-                }),
-            ],
-            Box::new(Route404 {
-                data: RouteData {
-                    method: "GET".to_owned(),
-                    path: "/404".to_owned(),
-                    params: None,
-                },
-            }) as Box<dyn Handleable>,
-        );
-
+        // let router = init_router();
+        let routes = self.routes.clone();
         let supervisor = self.supervisor_arc.clone();
-        Box::pin(async {
+        Box::pin(async move {
             println!(
                 "Request: {} {:?} Body: {:?}",
                 request.method(),
                 request.uri(),
                 request.body()
             );
-            // println!("Request: {:?}", request);
-            // Ok(async_fn)
-            let response: Response<Full<Bytes>> = router.handle_request(request, supervisor).await;
+
+            let route_feature = route(
+                request.method().to_string(),
+                request.uri().path().to_owned(),
+                routes,
+            );
+            let route = route_feature.await.unwrap_or(default_route());
+            let route_req_params = route_request_params(request.uri().path().to_owned(), &route);
+            let body = request.collect().await;
+
+            if let Err(err) = body {
+                let err_body = Full::new(bytes::Bytes::from(err.to_string()));
+                let response = Response::builder().status(500).body(err_body).unwrap();
+                return Ok(response);
+            }
+
+            let body = body.unwrap().to_bytes();
+
+            let response_future = route.handle_data(
+                route_req_params,
+                std::str::from_utf8(&body).unwrap().to_owned(),
+                supervisor,
+            );
+
+            let response = response_future.await.unwrap_or_else(|err| {
+                let err_body = Full::new(bytes::Bytes::from(err.to_string()));
+                Response::builder().status(500).body(err_body).unwrap()
+            });
+
             println!("Response: {} {:?}", response.status(), response.body());
-            // println!("Response: {:?}", response);
             Ok(response)
         })
     }
+}
+
+fn init_routes() -> Vec<Box<dyn Handleable>> {
+    // Box::new(Route404 {method: "GET".to_owned(), path: "/404".to_owned()})
+    vec![
+        Box::new(LaunchRoute {
+            data: RouteData {
+                method: "POST".to_owned(),
+                path: "/launch/{source_id}".to_owned(),
+                params: Some(HashMap::from([(
+                    "source_id".to_owned(),
+                    ParamType::Integer,
+                )])),
+            },
+        }),
+        Box::new(TerminateRoute {
+            data: RouteData {
+                method: "POST".to_owned(),
+                path: "/terminate/{source_id}".to_owned(),
+                params: Some(HashMap::from([(
+                    "source_id".to_owned(),
+                    ParamType::Integer,
+                )])),
+            },
+        }),
+        Box::new(KillRoute {
+            data: RouteData {
+                method: "POST".to_owned(),
+                path: "/kill/{source_id}".to_owned(),
+                params: Some(HashMap::from([(
+                    "source_id".to_owned(),
+                    ParamType::Integer,
+                )])),
+            },
+        }),
+        Box::new(GetStateList {
+            data: RouteData {
+                method: "GET".to_owned(),
+                path: "/state-list".to_owned(),
+                params: None,
+            },
+        }),
+    ]
+}
+
+fn default_route() -> Box<dyn Handleable> {
+    Box::new(Route404 {
+        data: RouteData {
+            method: "GET".to_owned(),
+            path: "/404".to_owned(),
+            params: None,
+        },
+    })
 }
