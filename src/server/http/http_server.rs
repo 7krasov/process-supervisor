@@ -72,49 +72,49 @@ impl Service<Request<Incoming>> for HttpService {
     fn call(&self, request: Request<Incoming>) -> Self::Future {
         let router = Router::new(
             vec![
-                // Box::new(Route404 {method: "GET".to_string(), path: "/404".to_string()})
+                // Box::new(Route404 {method: "GET".to_owned(), path: "/404".to_owned()})
                 Box::new(LaunchRoute {
                     data: RouteData {
-                        method: "POST".to_string(),
-                        path: "/launch/{source_id}".to_string(),
+                        method: "POST".to_owned(),
+                        path: "/launch/{source_id}".to_owned(),
                         params: Some(HashMap::from([(
-                            "source_id".to_string(),
+                            "source_id".to_owned(),
                             ParamType::Integer,
                         )])),
                     },
                 }),
                 Box::new(TerminateRoute {
                     data: RouteData {
-                        method: "POST".to_string(),
-                        path: "/terminate/{source_id}".to_string(),
+                        method: "POST".to_owned(),
+                        path: "/terminate/{source_id}".to_owned(),
                         params: Some(HashMap::from([(
-                            "source_id".to_string(),
+                            "source_id".to_owned(),
                             ParamType::Integer,
                         )])),
                     },
                 }),
                 Box::new(KillRoute {
                     data: RouteData {
-                        method: "POST".to_string(),
-                        path: "/kill/{source_id}".to_string(),
+                        method: "POST".to_owned(),
+                        path: "/kill/{source_id}".to_owned(),
                         params: Some(HashMap::from([(
-                            "source_id".to_string(),
+                            "source_id".to_owned(),
                             ParamType::Integer,
                         )])),
                     },
                 }),
                 Box::new(GetStateList {
                     data: RouteData {
-                        method: "GET".to_string(),
-                        path: "/state-list".to_string(),
+                        method: "GET".to_owned(),
+                        path: "/state-list".to_owned(),
                         params: None,
                     },
                 }),
             ],
             Box::new(Route404 {
                 data: RouteData {
-                    method: "GET".to_string(),
-                    path: "/404".to_string(),
+                    method: "GET".to_owned(),
+                    path: "/404".to_owned(),
                     params: None,
                 },
             }) as Box<dyn Handleable>,

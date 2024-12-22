@@ -88,7 +88,7 @@ impl Supervisor {
 
         let mut result = TerminateResult::new();
         if child.is_none() {
-            result.set_error("Child not found PID for SIGTERM sending".to_string());
+            result.set_error("Child not found PID for SIGTERM sending".to_owned());
             return result;
         }
         let child = child.unwrap();
@@ -144,7 +144,7 @@ impl Supervisor {
 
         if child.is_none() {
             let mut result = OldKillResult::new();
-            result.set_error("Child not found PID for SIGTERM sending".to_string());
+            result.set_error("Child not found PID for SIGTERM sending".to_owned());
             return result;
         }
         let child = child.unwrap();
@@ -191,7 +191,7 @@ impl Supervisor {
         //extract child PID from the processes
         let child = processes_guard.get_mut(&source_id);
         if child.is_none() {
-            result.set_error("Child not found PID for SIGKILL sending".to_string());
+            result.set_error("Child not found PID for SIGKILL sending".to_owned());
             return result;
         }
         let child = child.unwrap();
@@ -284,7 +284,7 @@ impl Supervisor {
         //extract child PID from the processes
         let child = processes_guard.get_mut(&source_id);
         if child.is_none() {
-            result.set_error("Child not found PID for SIGKILL sending.".to_string());
+            result.set_error("Child not found PID for SIGKILL sending.".to_owned());
             return result;
         }
         let child = child.unwrap();

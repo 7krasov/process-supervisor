@@ -120,7 +120,7 @@ impl Handleable for Route404 {
         _body: String,
         _supervisor_arc: Arc<RwLock<Supervisor>>,
     ) -> Result<Response<Full<Bytes>>, Error> {
-        self.prepare_response("404".to_string(), 404)
+        self.prepare_response("404".to_owned(), 404)
     }
 }
 
@@ -163,7 +163,7 @@ impl Handleable for TerminateRoute {
                 source_id,
                 result
                     .error_message()
-                    .unwrap_or(&"Unknown error".to_string())
+                    .unwrap_or(&"Unknown error".to_owned())
             ),
         };
 
@@ -207,7 +207,7 @@ impl Handleable for KillRoute {
                 source_id,
                 result
                     .error_message()
-                    .unwrap_or(&"Unknown error".to_string())
+                    .unwrap_or(&"Unknown error".to_owned())
             ),
         };
 

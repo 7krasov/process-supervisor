@@ -62,8 +62,6 @@ pub struct Router {
 
 impl Router {
     pub fn new(routes: Vec<Box<dyn Handleable>>, route_404: Box<dyn Handleable>) -> Self {
-        // let route_404 = Route404 {data: RouteData {method: "GET".to_string(), path: "/404".to_string(), params: None}};
-        // Self { routes, not_found_route: Box::new(route_404) as Box<dyn Handleable>}
         Self {
             routes,
             not_found_route: route_404,
