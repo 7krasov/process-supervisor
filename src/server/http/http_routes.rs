@@ -1,6 +1,6 @@
 use super::http_router::Handleable;
 use super::http_router::RouteData;
-use crate::supervisor::supervisor::Supervisor;
+use crate::supervisor::Supervisor;
 use async_trait::async_trait;
 use bytes::Bytes;
 use http_body_util::Full;

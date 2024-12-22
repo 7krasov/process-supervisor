@@ -1,20 +1,10 @@
 use server::http::http_server::start_http_server;
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
-use supervisor::supervisor::Supervisor;
+use supervisor::Supervisor;
 use tokio::sync::RwLock;
 
-mod supervisor {
-    mod results;
-    pub mod supervisor;
-}
-
-mod server {
-    pub mod http {
-        mod http_router;
-        mod http_routes;
-        pub mod http_server;
-    }
-}
+mod server;
+mod supervisor;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

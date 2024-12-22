@@ -10,8 +10,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::supervisor::supervisor::Supervisor;
-
+use crate::supervisor::Supervisor;
 #[async_trait]
 pub trait Handleable: Send + Sync + Debug {
     fn data(&self) -> &RouteData;

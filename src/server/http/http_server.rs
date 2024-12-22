@@ -1,6 +1,6 @@
 use super::http_router::{Handleable, ParamType, RouteData, Router};
 use super::http_routes::{GetStateList, KillRoute, LaunchRoute, Route404, TerminateRoute};
-use crate::supervisor::supervisor::Supervisor;
+use crate::supervisor::Supervisor;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 use hyper::server::conn::http1;

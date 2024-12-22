@@ -1,6 +1,8 @@
 use nix::sys::signal::{self};
 use nix::unistd::Pid;
 use procfs::process::Process;
+use results::TerminateResult;
+use results::{KillResult, LaunchResult, OldKillResult};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -12,9 +14,7 @@ use tokio::sync::RwLock;
 use tokio::task;
 use tokio::time::{sleep, sleep_until, Duration, Instant};
 
-use crate::supervisor::results::TerminateResult;
-
-use super::results::{KillResult, LaunchResult, OldKillResult};
+mod results;
 
 const SIGTERM_TIMEOUT_SECS: u64 = 20;
 
