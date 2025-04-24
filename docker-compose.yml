@@ -1,0 +1,20 @@
+services:
+  process_supervisor_coding:
+    container_name: process_supervisor_coding
+    build:
+      context: .
+      dockerfile: ops/docker/supervisor.coding.Dockerfile
+    volumes:
+      - ".:/var/app"
+    working_dir: /var/app
+    command: tail -f /dev/null
+  process_supervisor_app:
+    restart: no
+    container_name: process_supervisor_app
+    build:
+      context: .
+      dockerfile: ops/docker/supervisor.Dockerfile
+    volumes:
+      - ".:/var/app"
+    working_dir: /var/app
+    command: /app/processes-dispatcher
