@@ -4,6 +4,7 @@ use procfs::process::Process;
 use results::TerminateResult;
 use results::{KillResult, LaunchResult, OldKillResult};
 use serde::Serialize;
+use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::io::Error;
@@ -17,6 +18,7 @@ use tokio::time::{sleep, sleep_until, Duration, Instant};
 mod results;
 
 const SIGTERM_TIMEOUT_SECS: u64 = 20;
+const MAX_CHILDREN: usize = 10;
 
 #[derive(Debug, Serialize)]
 pub struct ChildState {
@@ -39,6 +41,8 @@ impl fmt::Display for ChildState {
 pub struct Supervisor {
     processes: Arc<RwLock<HashMap<i32, Child>>>,
     kill_queue: Arc<RwLock<HashMap<i32, u64>>>,
+    is_drain_mode: Arc<RwLock<bool>>,
+    is_filling_pending: Arc<RwLock<bool>>,
 }
 
 impl Supervisor {
@@ -46,6 +50,8 @@ impl Supervisor {
         Self {
             processes: Arc::new(RwLock::new(HashMap::new())),
             kill_queue: Arc::new(RwLock::new(HashMap::new())),
+            is_drain_mode: Arc::new(RwLock::new(false)),
+            is_filling_pending: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -524,6 +530,69 @@ impl Supervisor {
         // drop(kill_queue_guard);
         Some((source_id, terminate_signal_time))
     }
+
+    ///if empty processed slots exist, fetches new processes from dispatcher and run them
+    pub async fn populate_empty_slots(&self) {
+        let is_filling_pending_arc = self.is_filling_pending.clone();
+        let mut is_filling_pending = is_filling_pending_arc.write().await;
+        if *is_filling_pending {
+            return;
+        }
+        *is_filling_pending = true;
+        let processes_arc = self.processes.clone();
+        let processes_guard = processes_arc.read().await;
+        let processes_count = processes_guard.len();
+        if processes_count >= MAX_CHILDREN {
+            *is_filling_pending = false;
+            return;
+        }
+        for _ in processes_count..MAX_CHILDREN {
+            let supervisor = self.clone();
+
+            //TODO: set real dispatcher URL here
+            let resp = reqwest::get("https://httpbin.org/headers").await;
+            if resp.is_err() {
+                println!("Failed to fetch data from dispatcher: {:?}", resp.err());
+                continue;
+            }
+            let resp_text_result = resp.unwrap().text().await;
+            if resp_text_result.is_err() {
+                println!(
+                    "Failed to get response body string: {:?}",
+                    resp_text_result.err()
+                );
+                continue;
+            }
+            let resp_text = resp_text_result.unwrap();
+            let new_process_result: serde_json::Result<NewProcess> =
+                serde_json::from_str(&resp_text);
+
+            if new_process_result.is_err() {
+                println!(
+                    "Failed to parse response: {:?}. Data: {:?}",
+                    new_process_result.err(),
+                    resp_text
+                );
+                continue;
+            }
+            let new_process = new_process_result.unwrap();
+            let result = supervisor.launch(new_process.source_id).await;
+            if result.is_success() {
+                println!(
+                    "Process {:?} for source {:?} launched successfully",
+                    new_process.id, new_process.source_id
+                );
+                continue;
+            }
+            println!("Failed to launch child: {:?}", result.error_message());
+        }
+        *is_filling_pending = false;
+    }
+
+    pub async fn set_is_drain_mode(&self) {
+        let mut is_drain_mode_guard = self.is_drain_mode.write().await;
+        *is_drain_mode_guard = true;
+    }
 }
 
 impl Clone for Supervisor {
@@ -531,6 +600,14 @@ impl Clone for Supervisor {
         Self {
             processes: Arc::clone(&self.processes),
             kill_queue: Arc::clone(&self.kill_queue),
+            is_drain_mode: Arc::clone(&self.is_drain_mode),
+            is_filling_pending: Arc::clone(&self.is_filling_pending),
         }
     }
+}
+
+#[derive(Deserialize)]
+struct NewProcess {
+    id: String,
+    source_id: i32,
 }
