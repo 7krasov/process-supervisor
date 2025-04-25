@@ -1,5 +1,6 @@
 use nix::sys::signal::{self};
 use nix::unistd::Pid;
+#[cfg(target_os = "linux")]
 use procfs::process::Process;
 use results::TerminateResult;
 use results::{KillResult, LaunchResult, OldKillResult};
@@ -290,7 +291,7 @@ impl Supervisor {
         }
         let child = child.unwrap();
 
-        let state = self.get_child_state(id.clone(), child).unwrap();
+        let state = get_child_state(id.clone(), child).unwrap();
         if state.is_finished {
             println!(
                 "It seems the process finished itself. Exit code: {:?}",
@@ -459,46 +460,7 @@ impl Supervisor {
             Instant::now().duration_since(before_time)
         );
 
-        self.get_child_state(id, child)
-    }
-
-    fn get_child_state(&self, id: String, child: &mut Child) -> Result<ChildState, Error> {
-        let before_time = Instant::now();
-        let exit_status = child.try_wait()?;
-        println!(
-            "get_child_state: After child.try_wait()?, time: {:?}",
-            Instant::now().duration_since(before_time)
-        );
-        let is_finished = exit_status.is_some();
-        let exit_code = exit_status.and_then(|status| status.code());
-        Ok(ChildState {
-            id,
-            is_running: !is_finished,
-            is_finished,
-            exit_code,
-            is_killed: false,
-            rss_anon_memory_kb: self.get_memory_usage(child.id()).ok(),
-        })
-    }
-
-    //returns size in kilobytes
-    fn get_memory_usage(&self, pid: u32) -> std::io::Result<u64> {
-        let process = Process::new(pid as i32);
-        if process.is_err() {
-            return Ok(0);
-        }
-        let process = process.unwrap();
-
-        let status = process.status();
-        if status.is_err() {
-            return Ok(0);
-        }
-        let status = status.unwrap();
-        let rssanon = status.rssanon;
-        if rssanon.is_none() {
-            return Ok(0);
-        }
-        Ok(status.rssanon.unwrap())
+        get_child_state(id, child)
     }
 
     pub async fn process_kill_queue(&self) {
@@ -589,4 +551,55 @@ impl Clone for Supervisor {
 struct NewProcess {
     id: String,
     source_id: i32,
+}
+
+fn get_child_state(id: String, child: &mut Child) -> Result<ChildState, Error> {
+    let before_time = Instant::now();
+    let exit_status = child.try_wait()?;
+    println!(
+        "get_child_state: After child.try_wait()?, time: {:?}",
+        Instant::now().duration_since(before_time)
+    );
+    let is_finished = exit_status.is_some();
+    let exit_code = exit_status.and_then(|status| status.code());
+
+    #[cfg(not(target_os = "linux"))]
+    let memory_kb = None;
+    #[cfg(target_os = "linux")]
+    let memory_kb = get_memory_usage(child.id()).ok();
+
+    Ok(ChildState {
+        id,
+        is_running: !is_finished,
+        is_finished,
+        exit_code,
+        is_killed: false,
+        rss_anon_memory_kb: memory_kb,
+    })
+}
+
+///returns size in kilobytes
+#[cfg(target_os = "linux")]
+fn get_memory_usage(pid: u32) -> std::io::Result<u64> {
+    if cfg!(target_os = "linux") {
+        let process = Process::new(pid as i32);
+        if process.is_err() {
+            return Ok(0);
+        }
+        let process = process.unwrap();
+
+        let status = process.status();
+        if status.is_err() {
+            return Ok(0);
+        }
+        let status = status.unwrap();
+        let rssanon = status.rssanon;
+        if rssanon.is_none() {
+            return Ok(0);
+        }
+        return Ok(status.rssanon.unwrap());
+    }
+
+    //not linux
+    return Ok(0);
 }
