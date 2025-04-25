@@ -48,8 +48,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tokio::task::spawn(async move {
         loop {
             let supervisor_guard = supervisor_arc_clone.read().await;
-            supervisor_guard.populate_empty_slots().await;
+            let result = supervisor_guard.populate_empty_slots().await;
             drop(supervisor_guard);
+            if result.is_err() {
+                println!("Drain mode is caught. Will not populate anymore");
+                break;
+            }
             tokio::time::sleep(Duration::from_secs(30)).await;
         }
     });

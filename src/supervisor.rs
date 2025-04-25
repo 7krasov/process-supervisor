@@ -485,11 +485,38 @@ impl Supervisor {
     }
 
     ///if empty processed slots exist, fetches new processes from dispatcher and run them
-    pub async fn populate_empty_slots(&self) {
+    pub async fn populate_empty_slots(&self) -> Result<(), SlotsPopulationError> {
+        //check if we are in drain mode
+        let is_drain_mode_guard = self.is_drain_mode.read().await;
+        if *is_drain_mode_guard {
+            return Err(SlotsPopulationError::DrainModeObtained);
+        }
+
         let processes_arc = self.processes.clone();
         let processes_guard = processes_arc.read().await;
         let processes_count = processes_guard.len();
+
+        if processes_count == MAX_CHILDREN {
+            //all slots are occupied
+            println!("All slots are occupied. Nothing to do.");
+            return Ok(());
+        }
+
+        if processes_count < MAX_CHILDREN {
+            //some slots are empty
+            println!(
+                "Empty slots available: {}. Populating...",
+                MAX_CHILDREN - processes_count
+            );
+        }
+
         for _ in processes_count..MAX_CHILDREN {
+            //check if we are in drain mode
+            let is_drain_mode_guard = self.is_drain_mode.read().await;
+            if *is_drain_mode_guard {
+                return Err(SlotsPopulationError::DrainModeObtained);
+            }
+
             let supervisor = self.clone();
 
             //TODO: set real dispatcher URL here
@@ -529,11 +556,17 @@ impl Supervisor {
             }
             println!("Failed to launch child: {:?}", result.error_message());
         }
+        Ok(())
     }
 
     pub async fn set_is_drain_mode(&self) {
         let mut is_drain_mode_guard = self.is_drain_mode.write().await;
         *is_drain_mode_guard = true;
+    }
+
+    pub async fn is_drain_mode(&self) -> bool {
+        let is_drain_mode_guard = self.is_drain_mode.read().await;
+        *is_drain_mode_guard
     }
 }
 
@@ -551,6 +584,10 @@ impl Clone for Supervisor {
 struct NewProcess {
     id: String,
     source_id: i32,
+}
+
+pub enum SlotsPopulationError {
+    DrainModeObtained,
 }
 
 fn get_child_state(id: String, child: &mut Child) -> Result<ChildState, Error> {
