@@ -32,14 +32,10 @@ impl Handleable for LaunchRoute {
         _body: String,
         supervisor_arc: Arc<RwLock<Supervisor>>,
     ) -> Result<Response<Full<Bytes>>, Error> {
-        let source_id = route_req_params
-            .get("source_id")
-            .unwrap()
-            .parse::<i32>()
-            .unwrap();
+        let id = route_req_params.get("id").unwrap().parse::<String>()?;
 
         let supervisor_guard = supervisor_arc.read().await;
-        let future = supervisor_guard.launch(source_id);
+        let future = supervisor_guard.launch(id.clone());
         let result = future.await;
         let http_status_code = match result.is_success() {
             true => 200,
@@ -47,13 +43,13 @@ impl Handleable for LaunchRoute {
         };
         let message = match result.is_success() {
             true => format!(
-                "A process was started for source {}, PID={}",
-                source_id,
+                "A process {} was started, PID={}",
+                id,
                 result.pid().unwrap()
             ),
             false => format!(
                 "Failed to start a process for source {}. Error: {}",
-                source_id,
+                id,
                 result.error_message().unwrap()
             ),
         };
@@ -154,26 +150,19 @@ impl Handleable for TerminateRoute {
         _body: String,
         supervisor_arc: Arc<RwLock<Supervisor>>,
     ) -> Result<Response<Full<Bytes>>, Error> {
-        let source_id = route_req_params
-            .get("source_id")
-            .unwrap()
-            .parse::<i32>()
-            .unwrap();
+        let id = route_req_params.get("id").unwrap().parse::<String>()?;
         let supervisor_guard = supervisor_arc.read().await;
-        let result = supervisor_guard.terminate(source_id).await;
+        let result = supervisor_guard.terminate(id.clone()).await;
 
         let http_status_code = match result.is_success() {
             true => 200,
             false => 500,
         };
         let message = match result.is_success() {
-            true => format!(
-                "A process got the termination signal for source {}",
-                source_id
-            ),
+            true => format!("A process got the termination signal for source {}", id),
             false => format!(
                 "Failed to start a termination of the process for source {}. Error: {:?}",
-                source_id,
+                id,
                 result
                     .error_message()
                     .unwrap_or(&"Unknown error".to_owned())
@@ -204,23 +193,19 @@ impl Handleable for KillRoute {
         _body: String,
         supervisor_arc: Arc<RwLock<Supervisor>>,
     ) -> Result<Response<Full<Bytes>>, Error> {
-        let source_id = route_req_params
-            .get("source_id")
-            .unwrap()
-            .parse::<i32>()
-            .unwrap();
+        let id = route_req_params.get("id").unwrap().parse::<String>()?;
         let supervisor_guard = supervisor_arc.read().await;
-        let result = supervisor_guard.kill_old(source_id).await;
+        let result = supervisor_guard.kill_old(id.clone()).await;
 
         let http_status_code = match result.is_success() {
             true => 200,
             false => 500,
         };
         let message = match result.is_success() {
-            true => format!("A process was killed for source {}", source_id),
+            true => format!("A process {} was killed", id),
             false => format!(
-                "Failed to kill a process for source {}. Error: {:?}",
-                source_id,
+                "Failed to kill a process {}. Error: {:?}",
+                id,
                 result
                     .error_message()
                     .unwrap_or(&"Unknown error".to_owned())

@@ -128,31 +128,22 @@ fn init_routes() -> Vec<Box<dyn Handleable>> {
         Box::new(LaunchRoute {
             data: RouteData {
                 method: "POST".to_owned(),
-                path: "/launch/{source_id}".to_owned(),
-                params: Some(HashMap::from([(
-                    "source_id".to_owned(),
-                    ParamType::Integer,
-                )])),
+                path: "/launch/{id}".to_owned(),
+                params: Some(HashMap::from([("id".to_owned(), ParamType::Integer)])),
             },
         }),
         Box::new(TerminateRoute {
             data: RouteData {
                 method: "POST".to_owned(),
-                path: "/terminate/{source_id}".to_owned(),
-                params: Some(HashMap::from([(
-                    "source_id".to_owned(),
-                    ParamType::Integer,
-                )])),
+                path: "/terminate/{id}".to_owned(),
+                params: Some(HashMap::from([("id".to_owned(), ParamType::Integer)])),
             },
         }),
         Box::new(KillRoute {
             data: RouteData {
                 method: "POST".to_owned(),
-                path: "/kill/{source_id}".to_owned(),
-                params: Some(HashMap::from([(
-                    "source_id".to_owned(),
-                    ParamType::Integer,
-                )])),
+                path: "/kill/{id}".to_owned(),
+                params: Some(HashMap::from([("id".to_owned(), ParamType::Integer)])),
             },
         }),
         Box::new(GetStateList {
