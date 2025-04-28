@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let supervisor_guard = supervisor_arc_clone.read().await;
             supervisor_guard.process_kill_queue().await;
             drop(supervisor_guard);
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     });
     //run dispatcher processes if empty slots are available
