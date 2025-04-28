@@ -66,6 +66,7 @@ impl Supervisor {
                 let pid = child.id();
                 let processes_arc = self.processes.clone();
                 processes_arc.write().await.insert(id, child);
+                drop(processes_arc);
                 result.set_success(pid);
                 result
             }
@@ -99,7 +100,7 @@ impl Supervisor {
         let child = child.unwrap();
         let pid: i32 = child.id() as i32;
 
-        // drop(processes_guard);
+        drop(processes_guard);
 
         println!(
             "terminate: After dropping time: {:?}",
@@ -306,7 +307,6 @@ impl Supervisor {
             if ch.is_none() {
                 println!("Failed to remove child for process {}", id);
             }
-            // drop(processes_guard);
             return result;
         }
 
@@ -495,6 +495,7 @@ impl Supervisor {
         let processes_arc = self.processes.clone();
         let processes_guard = processes_arc.read().await;
         let processes_count = processes_guard.len();
+        drop(processes_guard);
 
         if processes_count == MAX_CHILDREN {
             //all slots are occupied
@@ -516,8 +517,6 @@ impl Supervisor {
             if *is_drain_mode_guard {
                 return Err(SlotsPopulationError::DrainModeObtained);
             }
-
-            let supervisor = self.clone();
 
             //TODO: set real dispatcher URL here
             let resp = reqwest::get("https://httpbin.org/headers").await;
@@ -543,10 +542,14 @@ impl Supervisor {
                     new_process_result.err(),
                     resp_text
                 );
+                // tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 continue;
             }
             let new_process = new_process_result.unwrap();
-            let result = supervisor.launch(new_process.id.clone()).await;
+            // let supervisor = self.clone();
+            // let result = supervisor.launch(new_process.id.clone()).await;
+            let result = self.launch(new_process.id.clone()).await;
+            // drop(supervisor);
             if result.is_success() {
                 println!(
                     "Process {:?} for source {:?} launched successfully",
