@@ -1,3 +1,7 @@
+use crate::dispatcher::{
+    obtain_new_process, report_process_finish, ProcessFinishReport, REPORT_STATUS_ERROR,
+    REPORT_STATUS_SUCCESS,
+};
 use nix::sys::signal::{self};
 use nix::unistd::Pid;
 #[cfg(target_os = "linux")]
@@ -5,7 +9,6 @@ use procfs::process::Process;
 use results::TerminateResult;
 use results::{KillResult, LaunchResult, OldKillResult};
 use serde::Serialize;
-use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::io::Error;
@@ -29,6 +32,12 @@ pub struct ChildState {
     exit_code: Option<i32>,
     is_killed: bool,
     rss_anon_memory_kb: Option<u64>,
+}
+
+impl ChildState {
+    pub fn is_finished(&self) -> bool {
+        self.is_finished
+    }
 }
 
 impl fmt::Display for ChildState {
@@ -424,7 +433,6 @@ impl Supervisor {
             }
         }
 
-        //TODO: find failed results and fill the array with an appropriate result
         states
 
         // return processes_guard.keys().map(|source_id| {
@@ -484,8 +492,55 @@ impl Supervisor {
         Some((id, terminate_signal_time))
     }
 
+    pub async fn process_states(&self) {
+        println!("Processing child states...");
+        let ps_arc = self.processes.clone();
+        // let ps_g = ps_arc.read().await;
+        let mut ps_g = ps_arc.write().await;
+        let ids: Vec<String> = ps_g.keys().cloned().collect();
+        for id in ids {
+            if let Some(child) = ps_g.get_mut(&id) {
+                //TODO: fix! processes are blocked here with mutex while collecting states
+                let state = get_child_state(id.clone(), child);
+                if state.is_err() {
+                    println!("Error getting child state: {}", state.err().unwrap());
+                    continue;
+                }
+                let state = state.unwrap();
+
+                if !state.is_finished {
+                    println!("Process {} is still running.", id);
+                    continue;
+                }
+
+                println!(
+                    "Process {} finished with exit code: {:?}. Reporting to the dispatcher...",
+                    id, state.exit_code
+                );
+                let exit_code = state.exit_code.unwrap_or(0);
+                let process_result = match exit_code {
+                    0 => REPORT_STATUS_SUCCESS.to_string(),
+                    _ => REPORT_STATUS_ERROR.to_string(),
+                };
+                let report = ProcessFinishReport::new(id.clone(), process_result);
+                //TODO: fix! processes are blocked here with mutex while requesting dispatcher
+                let report_result = report_process_finish(report).await;
+                if report_result.is_err() {
+                    println!("Failed to report process finish: {:?}", report_result.err());
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                    continue;
+                }
+                println!("Process {:?} finish reported successfully. Removing", id);
+                ps_g.remove(&id);
+                continue;
+            }
+        }
+        println!("Child states processing is finished.");
+    }
+
     ///if empty processed slots exist, fetches new processes from dispatcher and run them
     pub async fn populate_empty_slots(&self) -> Result<(), SlotsPopulationError> {
+        println!("Populating empty slots...");
         //check if we are in drain mode
         let is_drain_mode_guard = self.is_drain_mode.read().await;
         if *is_drain_mode_guard {
@@ -518,47 +573,31 @@ impl Supervisor {
                 return Err(SlotsPopulationError::DrainModeObtained);
             }
 
-            //TODO: set real dispatcher URL here
-            let resp = reqwest::get("https://httpbin.org/headers").await;
-            if resp.is_err() {
-                println!("Failed to fetch data from dispatcher: {:?}", resp.err());
-                continue;
-            }
-            let resp_text_result = resp.unwrap().text().await;
-            if resp_text_result.is_err() {
-                println!(
-                    "Failed to get response body string: {:?}",
-                    resp_text_result.err()
-                );
-                continue;
-            }
-            let resp_text = resp_text_result.unwrap();
-            let new_process_result: serde_json::Result<NewProcess> =
-                serde_json::from_str(&resp_text);
+            println!("Sleeping...");
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-            if new_process_result.is_err() {
-                println!(
-                    "Failed to parse response: {:?}. Data: {:?}",
-                    new_process_result.err(),
-                    resp_text
-                );
-                // tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            let new_process = obtain_new_process().await;
+            if new_process.is_err() {
+                println!("Failed to obtain new process: {:?}", new_process.err());
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 continue;
             }
-            let new_process = new_process_result.unwrap();
+            let new_process = new_process.unwrap();
             // let supervisor = self.clone();
             // let result = supervisor.launch(new_process.id.clone()).await;
-            let result = self.launch(new_process.id.clone()).await;
+            let result = self.launch(new_process.id().clone()).await;
             // drop(supervisor);
             if result.is_success() {
                 println!(
                     "Process {:?} for source {:?} launched successfully",
-                    new_process.id, new_process.source_id
+                    new_process.id(),
+                    new_process.source_id()
                 );
                 continue;
             }
             println!("Failed to launch child: {:?}", result.error_message());
         }
+        println!("Populating empty slots is finished.");
         Ok(())
     }
 
@@ -581,12 +620,6 @@ impl Clone for Supervisor {
             is_drain_mode: Arc::clone(&self.is_drain_mode),
         }
     }
-}
-
-#[derive(Deserialize)]
-struct NewProcess {
-    id: String,
-    source_id: i32,
 }
 
 pub enum SlotsPopulationError {

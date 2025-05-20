@@ -17,4 +17,4 @@ services:
     volumes:
       - ".:/var/app"
     working_dir: /var/app
-    command: /app/processes-dispatcher
+    command: /var/app/process_supervisor

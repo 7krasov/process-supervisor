@@ -1,1 +1,3 @@
-pub mod drain_mode_observer;
+pub mod k8s_common;
+pub mod k8s_controller;
+pub mod k8s_supervisor;
