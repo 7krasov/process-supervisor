@@ -1,7 +1,4 @@
-use crate::dispatcher::{
-    obtain_new_process, report_process_finish, ProcessFinishReport, REPORT_STATUS_ERROR,
-    REPORT_STATUS_SUCCESS,
-};
+use crate::dispatcher;
 use nix::sys::signal::{self};
 use nix::unistd::Pid;
 #[cfg(target_os = "linux")]
@@ -308,14 +305,15 @@ impl Supervisor {
                 state.exit_code
             );
             result.set_success(state.exit_code);
-            let ch = processes_guard.remove(&id);
-            println!(
-                "After child remove time: {:?}",
-                Instant::now().duration_since(before_time)
-            );
-            if ch.is_none() {
-                println!("Failed to remove child for process {}", id);
-            }
+            //we use process_states() to clean up the processes list
+            // let ch = processes_guard.remove(&id);
+            // println!(
+            //     "After child remove time: {:?}",
+            //     Instant::now().duration_since(before_time)
+            // );
+            // if ch.is_none() {
+            //     println!("Failed to remove child for process {}", id);
+            // }
             return result;
         }
 
@@ -335,15 +333,16 @@ impl Supervisor {
                     Instant::now().duration_since(before_time)
                 );
 
-                let ch = processes_guard.remove(&id);
-                println!(
-                    "After child remove time: {:?}",
-                    Instant::now().duration_since(before_time)
-                );
-                if ch.is_none() {
-                    println!("Failed to remove child for processes {}", id);
-                }
-                drop(processes_guard);
+                //we use process_states() to clean up the processes list
+                // let ch = processes_guard.remove(&id);
+                // println!(
+                //     "After child remove time: {:?}",
+                //     Instant::now().duration_since(before_time)
+                // );
+                // if ch.is_none() {
+                //     println!("Failed to remove child for processes {}", id);
+                // }
+                // drop(processes_guard);
 
                 match exit_status {
                     Ok(status) => {
@@ -495,45 +494,53 @@ impl Supervisor {
     pub async fn process_states(&self) {
         println!("Processing child states...");
         let ps_arc = self.processes.clone();
-        // let ps_g = ps_arc.read().await;
-        let mut ps_g = ps_arc.write().await;
+
+        let mut ps_g = ps_arc.read().await;
         let ids: Vec<String> = ps_g.keys().cloned().collect();
+        drop(ps_g);
+
         for id in ids {
-            if let Some(child) = ps_g.get_mut(&id) {
-                //TODO: fix! processes are blocked here with mutex while collecting states
-                let state = get_child_state(id.clone(), child);
-                if state.is_err() {
-                    println!("Error getting child state: {}", state.err().unwrap());
-                    continue;
-                }
-                let state = state.unwrap();
-
-                if !state.is_finished {
-                    println!("Process {} is still running.", id);
-                    continue;
-                }
-
-                println!(
-                    "Process {} finished with exit code: {:?}. Reporting to the dispatcher...",
-                    id, state.exit_code
-                );
-                let exit_code = state.exit_code.unwrap_or(0);
-                let process_result = match exit_code {
-                    0 => REPORT_STATUS_SUCCESS.to_string(),
-                    _ => REPORT_STATUS_ERROR.to_string(),
-                };
-                let report = ProcessFinishReport::new(id.clone(), process_result);
-                //TODO: fix! processes are blocked here with mutex while requesting dispatcher
-                let report_result = report_process_finish(report).await;
-                if report_result.is_err() {
-                    println!("Failed to report process finish: {:?}", report_result.err());
-                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                    continue;
-                }
-                println!("Process {:?} finish reported successfully. Removing", id);
-                ps_g.remove(&id);
+            let mut ps_g = ps_arc.write().await;
+            let child = ps_g.get_mut(&id);
+            if child.is_none() {
+                println!("Child {} not found in the process list", id.clone());
+                drop(ps_g);
                 continue;
             }
+
+            let state = get_child_state(id.clone(), child.unwrap());
+            drop(ps_g);
+            if state.is_err() {
+                println!("Error getting child state: {}", state.err().unwrap());
+                continue;
+            }
+            let state = state.unwrap();
+
+            if !state.is_finished {
+                println!("Process {} is still running.", id);
+                continue;
+            }
+
+            println!(
+                "Process {} finished with exit code: {:?}. Reporting to the dispatcher...",
+                id, state.exit_code
+            );
+            let exit_code = state.exit_code.unwrap_or(0);
+            let process_result = match exit_code {
+                0 => dispatcher::REPORT_STATUS_SUCCESS.to_string(),
+                _ => dispatcher::REPORT_STATUS_ERROR.to_string(),
+            };
+            let report = dispatcher::ProcessFinishReport::new(id.clone(), process_result);
+            let report_result = dispatcher::report_process_finish(report).await;
+            if report_result.is_err() {
+                println!("Failed to report process finish: {:?}", report_result.err());
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                continue;
+            }
+            println!("Process {:?} finish reported successfully. Removing...", id);
+            let mut ps_g = ps_arc.write().await;
+            ps_g.remove(&id);
+            println!("Process {:?} removed successfully.", id);
         }
         println!("Child states processing is finished.");
     }
@@ -576,7 +583,7 @@ impl Supervisor {
             println!("Sleeping...");
             tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
-            let new_process = obtain_new_process().await;
+            let new_process = dispatcher::obtain_new_process().await;
             if new_process.is_err() {
                 println!("Failed to obtain new process: {:?}", new_process.err());
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
