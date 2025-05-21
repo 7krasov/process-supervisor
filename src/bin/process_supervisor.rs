@@ -17,9 +17,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     };
 
+    let sig_term_timeout: u64 = match env::var("SIGTERM_TIMEOUT_SECS") {
+        Ok(timeout) => timeout.parse::<u64>().unwrap(),
+        Err(_) => {
+            println!("SIGTERM_TIMEOUT_SECS is not set. Using default 20");
+            20
+        }
+    };
+
+    let max_children_count: usize = match env::var("MAX_CHILDREN_COUNT") {
+        Ok(count) => count.parse::<usize>().unwrap(),
+        Err(_) => {
+            println!("MAX_CHILDREN_COUNT is not set. Using default 10");
+            10
+        }
+    };
+
     let k8s_params = k8s_common::get_k8s_params().await;
 
-    let supervisor_arc = Arc::new(RwLock::new(Supervisor::new()));
+    let supervisor_arc = Arc::new(RwLock::new(Supervisor::new(
+        max_children_count,
+        sig_term_timeout,
+    )));
 
     //terminate supervisor in case the drain mode is enabled and all processes are finished
     let sv_arc = Arc::clone(&supervisor_arc);

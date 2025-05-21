@@ -18,9 +18,6 @@ use tokio::time::{sleep, sleep_until, Duration, Instant};
 
 mod results;
 
-const SIGTERM_TIMEOUT_SECS: u64 = 20;
-const MAX_CHILDREN: usize = 10;
-
 #[derive(Debug, Serialize)]
 pub struct ChildState {
     id: String,
@@ -49,14 +46,18 @@ pub struct Supervisor {
     processes: Arc<RwLock<HashMap<String, Child>>>,
     kill_queue: Arc<RwLock<HashMap<String, u64>>>,
     is_drain_mode: Arc<RwLock<bool>>,
+    max_children_count: usize,
+    sig_term_timeout: u64,
 }
 
 impl Supervisor {
-    pub fn new() -> Self {
+    pub fn new(max_children_count: usize, sig_term_timeout: u64) -> Self {
         Self {
             processes: Arc::new(RwLock::new(HashMap::new())),
             kill_queue: Arc::new(RwLock::new(HashMap::new())),
             is_drain_mode: Arc::new(RwLock::new(false)),
+            max_children_count,
+            sig_term_timeout,
         }
     }
 
@@ -175,7 +176,7 @@ impl Supervisor {
             "kill: After SIGTERM sending: {:?}",
             Instant::now().duration_since(before_time)
         );
-        let duration = Duration::from_secs(SIGTERM_TIMEOUT_SECS);
+        let duration = Duration::from_secs(self.sig_term_timeout);
         let deadline = Instant::now() + duration;
         println!("kill: Sleeping until: {:?}", deadline);
         sleep_until(deadline).await;
@@ -268,9 +269,9 @@ impl Supervisor {
             .as_secs()
             - terminate_signal_time;
 
-        if wait_time_elapsed < SIGTERM_TIMEOUT_SECS {
+        if wait_time_elapsed < self.sig_term_timeout {
             println!("There is some time left before SIGKILL sending. Sleeping...");
-            let sleep_time = SIGTERM_TIMEOUT_SECS - wait_time_elapsed;
+            let sleep_time = self.sig_term_timeout - wait_time_elapsed;
             println!("kill: Sleeping seconds: {:?}", sleep_time);
             sleep(Duration::from_secs(sleep_time)).await;
             println!("kill: After sleep awaiting: {:?}", now.elapsed());
@@ -560,21 +561,21 @@ impl Supervisor {
         let processes_count = processes_guard.len();
         drop(processes_guard);
 
-        if processes_count == MAX_CHILDREN {
+        if processes_count == self.max_children_count {
             //all slots are occupied
             println!("All slots are occupied. Nothing to do.");
             return Ok(());
         }
 
-        if processes_count < MAX_CHILDREN {
+        if processes_count < self.max_children_count {
             //some slots are empty
             println!(
                 "Empty slots available: {}. Populating...",
-                MAX_CHILDREN - processes_count
+                self.max_children_count - processes_count
             );
         }
 
-        for _ in processes_count..MAX_CHILDREN {
+        for _ in processes_count..self.max_children_count {
             //check if we are in drain mode
             let is_drain_mode_guard = self.is_drain_mode.read().await;
             if *is_drain_mode_guard {
@@ -626,6 +627,8 @@ impl Clone for Supervisor {
             processes: Arc::clone(&self.processes),
             kill_queue: Arc::clone(&self.kill_queue),
             is_drain_mode: Arc::clone(&self.is_drain_mode),
+            max_children_count: self.max_children_count,
+            sig_term_timeout: self.sig_term_timeout,
         }
     }
 }
