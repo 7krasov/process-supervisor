@@ -2,6 +2,7 @@ use crate::k8s::k8s_common::K8sParams;
 use futures_util::stream::StreamExt;
 use k8s_openapi::api::core::v1::Pod;
 use kube::api::{ListParams, Patch, PatchParams};
+use kube::core::ObjectList;
 use kube::{Api, Client, ResourceExt};
 use kube_runtime::controller::Action;
 use kube_runtime::{watcher, Controller};
@@ -25,7 +26,7 @@ enum ReconcileError {
     SerdeError(#[from] serde_json::Error),
 }
 
-async fn terminate_supervisors(pods: Api<Pod>) {
+async fn terminate_supervisors(pods_api: Api<Pod>) {
     println!("Termination supervisor pods...");
 
     let patch = json!({
@@ -36,24 +37,38 @@ async fn terminate_supervisors(pods: Api<Pod>) {
         }
     });
 
-    for pod in pods.list(&ListParams::default()).await.unwrap() {
-        let name = pod.name_any();
-        let res = pods
-            .patch(
-                &name,
-                &PatchParams::apply("process-supervisor/terminate"),
-                &Patch::Merge(&patch),
-            )
-            .await;
-        match res {
-            Ok(_) => {
-                println!("Pod {} marked for termination", name);
-            }
-            Err(e) => {
-                println!("Failed to mark pod {} for termination: {}", name, e);
+    loop {
+        let pods = get_supervisor_pods(pods_api.clone()).await;
+        if pods.items.is_empty() {
+            println!("No supervisor pods found. Termination has been completed completed.");
+            break;
+        }
+        println!("Found {} supervisor pods", pods.items.len());
+
+        for pod in pods {
+            let name = pod.name_any();
+            //annotating a supervisor pod for termination. It will catch a new annotation and terminate itself
+            let res = pods_api
+                .patch(
+                    &name,
+                    &PatchParams::apply("process-supervisor/terminate"),
+                    &Patch::Merge(&patch),
+                )
+                .await;
+            match res {
+                Ok(_) => {
+                    println!("Pod {} marked for termination", name);
+                }
+                Err(e) => {
+                    println!("Failed to mark pod {} for termination: {}", name, e);
+                }
             }
         }
     }
+}
+
+pub async fn get_supervisor_pods(pods_api: Api<Pod>) -> ObjectList<Pod> {
+    pods_api.list(&ListParams::default()).await.unwrap()
 }
 
 async fn get_controller_pod(client: Client, namespace: &str) -> Option<Pod> {
@@ -65,6 +80,7 @@ async fn get_controller_pod(client: Client, namespace: &str) -> Option<Pod> {
     pod_list.items.into_iter().next()
 }
 
+// detects if the controller got an annotation to terminate all supervisor pods
 async fn check_terminate_annotation(client: Client, namespace: &str) -> bool {
     if let Some(pod) = get_controller_pod(client, namespace).await {
         let should_terminate = pod
@@ -120,7 +136,8 @@ async fn reconcile(pod: Arc<Pod>, ctx: Arc<ReconcileContext>) -> Result<Action, 
         };
     }
 
-    // if POD is marked to be deleted by k8s, drain it and remove finalizer
+    // if a pod is marked to be deleted by k8s, add "drain" annotation to it
+    // supervisor will not get new processes and will terminate itself after all processes are finished
     if metadata.deletion_timestamp.is_some() {
         let annotations = metadata.annotations.clone().unwrap_or_default();
         let already_draining = annotations
@@ -168,7 +185,7 @@ async fn controller(namespace: &str, client: Client) {
     //prepare pods API
     let pods = Api::namespaced(client.clone(), namespace).clone();
 
-    //check if the controller got a signal to terminate all supervisor pods
+    //check if the controller pod got an annotation to terminate all supervisor pods
     let should_terminate_supervisors = check_terminate_annotation(client.clone(), namespace).await;
     if should_terminate_supervisors {
         //got a signal to terminate all supervisors
