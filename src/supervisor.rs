@@ -495,7 +495,7 @@ impl Supervisor {
         println!("Processing child states...");
         let ps_arc = self.processes.clone();
 
-        let mut ps_g = ps_arc.read().await;
+        let ps_g = ps_arc.read().await;
         let ids: Vec<String> = ps_g.keys().cloned().collect();
         drop(ps_g);
 
