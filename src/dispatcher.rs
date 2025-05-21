@@ -27,15 +27,24 @@ impl NewProcess {
 
 #[derive(Debug)]
 pub enum ProcessDispatcherClientError {
+    #[allow(dead_code)]
     NetworkProblem(String),
+    #[allow(dead_code)]
     BadResponseBody(String),
+    #[allow(dead_code)]
     ParseError(String),
 }
 
-//TODO: provide timeout!
+fn get_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .unwrap()
+}
 
 pub async fn obtain_new_process() -> Result<NewProcess, ProcessDispatcherClientError> {
-    let resp = reqwest::get(OBTAIN_PROCESS_URL).await;
+    let resp = get_client().get(OBTAIN_PROCESS_URL).send().await;
     if resp.is_err() {
         let err = resp.err().unwrap();
         return Err(ProcessDispatcherClientError::NetworkProblem(format!(
@@ -82,8 +91,7 @@ pub async fn report_process_finish(
     report: ProcessFinishReport,
 ) -> Result<(), ProcessDispatcherClientError> {
     let url = REPORT_PROCESS_FINISH_URL.replace("{process_id}", &report.process_id);
-    let client = reqwest::Client::new();
-    let response = client.patch(&url).json(&report).send().await;
+    let response = get_client().patch(&url).json(&report).send().await;
 
     if response.is_err() {
         let err = response.err().unwrap();
