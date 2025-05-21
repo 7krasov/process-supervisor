@@ -540,6 +540,7 @@ impl Supervisor {
             println!("Process {:?} finish reported successfully. Removing...", id);
             let mut ps_g = ps_arc.write().await;
             ps_g.remove(&id);
+            drop(ps_g);
             println!("Process {:?} removed successfully.", id);
         }
         println!("Child states processing is finished.");
