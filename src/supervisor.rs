@@ -46,6 +46,7 @@ pub struct Supervisor {
     processes: Arc<RwLock<HashMap<String, Child>>>,
     kill_queue: Arc<RwLock<HashMap<String, u64>>>,
     is_drain_mode: Arc<RwLock<bool>>,
+    is_terminate_mode: Arc<RwLock<bool>>,
     max_children_count: usize,
     sig_term_timeout: u64,
 }
@@ -56,6 +57,7 @@ impl Supervisor {
             processes: Arc::new(RwLock::new(HashMap::new())),
             kill_queue: Arc::new(RwLock::new(HashMap::new())),
             is_drain_mode: Arc::new(RwLock::new(false)),
+            is_terminate_mode: Arc::new(RwLock::new(false)),
             max_children_count,
             sig_term_timeout,
         }
@@ -492,7 +494,8 @@ impl Supervisor {
         Some((id, terminate_signal_time))
     }
 
-    pub async fn process_states(&self) {
+    //cleans up the processes list from finished processes and returns the number of processes left
+    pub async fn process_states(&self) -> usize {
         println!("Processing child states...");
         let ps_arc = self.processes.clone();
 
@@ -500,10 +503,12 @@ impl Supervisor {
         let ids: Vec<String> = ps_g.keys().cloned().collect();
         drop(ps_g);
 
+        let mut working_processes_cnt = ids.len();
         for id in ids {
             let mut ps_g = ps_arc.write().await;
             let child = ps_g.get_mut(&id);
             if child.is_none() {
+                working_processes_cnt -= 1;
                 println!("Child {} not found in the process list", id.clone());
                 drop(ps_g);
                 continue;
@@ -527,6 +532,7 @@ impl Supervisor {
                 id, state.exit_code
             );
             let exit_code = state.exit_code.unwrap_or(0);
+            //TODO: report kill status to dispatcher
             let process_result = match exit_code {
                 0 => dispatcher::REPORT_STATUS_SUCCESS.to_string(),
                 _ => dispatcher::REPORT_STATUS_ERROR.to_string(),
@@ -541,10 +547,12 @@ impl Supervisor {
             println!("Process {:?} finish reported successfully. Removing...", id);
             let mut ps_g = ps_arc.write().await;
             ps_g.remove(&id);
+            working_processes_cnt -= 1;
             drop(ps_g);
             println!("Process {:?} removed successfully.", id);
         }
         println!("Child states processing is finished.");
+        working_processes_cnt
     }
 
     ///if empty processed slots exist, fetches new processes from dispatcher and run them
@@ -561,7 +569,7 @@ impl Supervisor {
         let processes_count = processes_guard.len();
         drop(processes_guard);
 
-        if processes_count == self.max_children_count {
+        if processes_count >= self.max_children_count {
             //all slots are occupied
             println!("All slots are occupied. Nothing to do.");
             return Ok(());
@@ -583,12 +591,12 @@ impl Supervisor {
             }
 
             println!("Sleeping...");
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
             let new_process = dispatcher::obtain_new_process().await;
             if new_process.is_err() {
                 println!("Failed to obtain new process: {:?}", new_process.err());
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
                 continue;
             }
             let new_process = new_process.unwrap();
@@ -619,6 +627,15 @@ impl Supervisor {
         let is_drain_mode_guard = self.is_drain_mode.read().await;
         *is_drain_mode_guard
     }
+
+    pub async fn set_is_terminate_mode(&self) {
+        let mut is_terminate_mode_guard = self.is_terminate_mode.write().await;
+        *is_terminate_mode_guard = true;
+    }
+    pub async fn is_terminate_mode(&self) -> bool {
+        let is_terminate_mode_guard = self.is_terminate_mode.read().await;
+        *is_terminate_mode_guard
+    }
 }
 
 impl Clone for Supervisor {
@@ -627,6 +644,7 @@ impl Clone for Supervisor {
             processes: Arc::clone(&self.processes),
             kill_queue: Arc::clone(&self.kill_queue),
             is_drain_mode: Arc::clone(&self.is_drain_mode),
+            is_terminate_mode: Arc::clone(&self.is_terminate_mode),
             max_children_count: self.max_children_count,
             sig_term_timeout: self.sig_term_timeout,
         }

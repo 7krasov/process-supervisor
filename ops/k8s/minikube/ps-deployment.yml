@@ -61,4 +61,4 @@ spec:
       #termination graceful period starts countdown right after "preStop" hook called. Lets application complete
       #all stuff and stop working itself. When this period exceeds, the SIGKILL signal is sent
       terminationGracePeriodSeconds: 60
-      initContainers:
+      restartPolicy: OnFailure

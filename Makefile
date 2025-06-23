@@ -3,17 +3,17 @@ K8S_DIR := ops/k8s/minikube
 run-coding:
 	docker compose start process_supervisor
 run-local-app:
-	clear && HTTP_PORT=8888 cargo run
+	clear && HTTP_PORT=8888 cargo run --bin process_supervisor
 exec:
 	docker compose exec process_supervisor_coding bash
 
 
 deploy-minikube-project:
 	kubectl create namespace process-supervisor || true
-	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-controller-role.yml
-	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-controller-serviceaccount.yml
-	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-controller-rolebinding.yml
-	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-controller-deployment.yml
+#	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-controller-role.yml
+#	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-controller-serviceaccount.yml
+#	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-controller-rolebinding.yml
+#	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-controller-deployment.yml
 	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-role.yml
 	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-serviceaccount.yml
 	kubectl apply -n process-supervisor -f $(K8S_DIR)/ps-rolebinding.yml
@@ -30,21 +30,21 @@ delete-minikube-project:
 	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-rolebinding.yml || true
 	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-serviceaccount.yml || true
 	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-role.yml || true
-	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-controller-deployment.yml || true
-	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-controller-rolebinding.yml || true
-	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-controller-serviceaccount.yml || true
-	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-controller-role.yml || true
+#	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-controller-deployment.yml || true
+#	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-controller-rolebinding.yml || true
+#	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-controller-serviceaccount.yml || true
+#	kubectl delete -n process-supervisor -f $(K8S_DIR)/ps-controller-role.yml || true
 	kubectl delete namespace process-supervisor || true
 
 restart-minikube-supervisor-deployment:
 	kubectl -n process-supervisor rollout restart deployment process-supervisor-app-deployment
 
-restart-minikube-supervisor-controller-deployment:
-	kubectl -n process-supervisor rollout restart deployment processing-supervisor-controller-deployment
+#restart-minikube-supervisor-controller-deployment:
+#	kubectl -n process-supervisor rollout restart deployment processing-supervisor-controller-deployment
 
-terminate-supervisors:
-	#this way controller will know it should patch all pods so they see terminate-supervisors=true and terminate itself
-	kubectl annotate deployment processing-supervisor-controller-deployment -n process-supervisor terminate-supervisors=true
+#terminate-supervisors:
+#	#this way controller will know it should patch all pods so they see terminate-supervisors=true and terminate itself
+#	kubectl annotate deployment processing-supervisor-controller-deployment -n process-supervisor terminate-supervisors=true
 
 remove-pod-finalizer:
 	#delete pod command will not work even with --force. We should remove finalizer from this pod first
