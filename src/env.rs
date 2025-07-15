@@ -1,9 +1,13 @@
+use crate::dispatcher::{DEFAULT_OBTAIN_PROCESS_URL, DEFAULT_REPORT_PROCESS_FINISH_URL};
 use std::env;
 
 pub struct EnvParams {
     http_port: u16,
     sigterm_timeout_secs: u64,
     max_children_count: usize,
+    obtain_process_url: String,
+    report_process_finish_url: String,
+    supervisor_id: String,
 }
 
 impl EnvParams {
@@ -17,6 +21,16 @@ impl EnvParams {
 
     pub fn max_children_count(&self) -> usize {
         self.max_children_count
+    }
+    pub fn obtain_process_url(&self) -> &str {
+        &self.obtain_process_url
+    }
+    pub fn report_process_finish_url(&self) -> &str {
+        &self.report_process_finish_url
+    }
+
+    pub fn supervisor_id(&self) -> &str {
+        &self.supervisor_id
     }
 }
 
@@ -44,9 +58,33 @@ pub fn fetch_env_params() -> EnvParams {
             10
         }
     };
+
+    let obtain_process_url: String = env::var("OBTAIN_PROCESS_URL").unwrap_or_else(|_| {
+        println!(
+            "OBTAIN_PROCESS_URL is not set. Using default {}",
+            DEFAULT_OBTAIN_PROCESS_URL
+        );
+        DEFAULT_OBTAIN_PROCESS_URL.to_string()
+    });
+
+    let report_process_finish_url: String =
+        env::var("REPORT_PROCESS_FINISH_URL").unwrap_or_else(|_| {
+            println!(
+                "REPORT_PROCESS_FINISH_URL is not set. Using default {}",
+                DEFAULT_REPORT_PROCESS_FINISH_URL
+            );
+            DEFAULT_REPORT_PROCESS_FINISH_URL.to_string()
+        });
+
+    let supervisor_id: String =
+        env::var("HOST_NAME").expect("HOST_NAME is not set, please set it to supervisor id");
+
     EnvParams {
         http_port,
         sigterm_timeout_secs,
         max_children_count,
+        obtain_process_url,
+        report_process_finish_url,
+        supervisor_id,
     }
 }

@@ -1,4 +1,6 @@
 use crate::dispatcher;
+use crate::dispatcher::DispatcherClient;
+use crate::env::EnvParams;
 use nix::sys::signal::{self};
 use nix::unistd::Pid;
 #[cfg(target_os = "linux")]
@@ -43,6 +45,7 @@ impl fmt::Display for ChildState {
 
 #[derive(Debug)]
 pub struct Supervisor {
+    dispatcher_client: DispatcherClient,
     processes: Arc<RwLock<HashMap<String, Child>>>,
     kill_queue: Arc<RwLock<HashMap<String, u64>>>,
     is_drain_mode: Arc<RwLock<bool>>,
@@ -52,14 +55,15 @@ pub struct Supervisor {
 }
 
 impl Supervisor {
-    pub fn new(max_children_count: usize, sig_term_timeout: u64) -> Self {
+    pub fn new(env_params: &EnvParams) -> Self {
         Self {
+            dispatcher_client: DispatcherClient::new(env_params),
             processes: Arc::new(RwLock::new(HashMap::new())),
             kill_queue: Arc::new(RwLock::new(HashMap::new())),
             is_drain_mode: Arc::new(RwLock::new(false)),
             is_terminate_mode: Arc::new(RwLock::new(false)),
-            max_children_count,
-            sig_term_timeout,
+            max_children_count: env_params.max_children_count(),
+            sig_term_timeout: env_params.sigterm_timeout_secs(),
         }
     }
 
@@ -538,7 +542,7 @@ impl Supervisor {
                 _ => dispatcher::REPORT_STATUS_ERROR.to_string(),
             };
             let report = dispatcher::ProcessFinishReport::new(id.clone(), process_result);
-            let report_result = dispatcher::report_process_finish(report).await;
+            let report_result = self.dispatcher_client.report_process_finish(report).await;
             if report_result.is_err() {
                 println!("Failed to report process finish: {:?}", report_result.err());
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -593,22 +597,21 @@ impl Supervisor {
             println!("Sleeping...");
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-            let new_process = dispatcher::obtain_new_process().await;
-            if new_process.is_err() {
-                println!("Failed to obtain new process: {:?}", new_process.err());
+            let assigned_process = self.dispatcher_client.obtain_new_process().await;
+            if assigned_process.is_err() {
+                println!("Failed to obtain new process: {:?}", assigned_process.err());
                 tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
                 continue;
             }
-            let new_process = new_process.unwrap();
+            let assigned_process = assigned_process.unwrap();
             // let supervisor = self.clone();
             // let result = supervisor.launch(new_process.id.clone()).await;
-            let result = self.launch(new_process.id().clone()).await;
+            let result = self.launch(assigned_process.id.clone()).await;
             // drop(supervisor);
             if result.is_success() {
                 println!(
                     "Process {:?} for source {:?} launched successfully",
-                    new_process.id(),
-                    new_process.source_id()
+                    assigned_process.id, assigned_process.source_id
                 );
                 continue;
             }
@@ -641,6 +644,7 @@ impl Supervisor {
 impl Clone for Supervisor {
     fn clone(&self) -> Self {
         Self {
+            dispatcher_client: self.dispatcher_client.clone(),
             processes: Arc::clone(&self.processes),
             kill_queue: Arc::clone(&self.kill_queue),
             is_drain_mode: Arc::clone(&self.is_drain_mode),

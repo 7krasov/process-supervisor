@@ -17,10 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     //obtain k8s parameters
     let k8s_params = k8s_common::get_k8s_params().await;
 
-    let supervisor_arc = Arc::new(RwLock::new(Supervisor::new(
-        env_params.max_children_count(),
-        env_params.sigterm_timeout_secs(),
-    )));
+    let supervisor_arc = Arc::new(RwLock::new(Supervisor::new(&env_params)));
 
     //prepare the kill queue processing task
     let sv_arc = Arc::clone(&supervisor_arc);
